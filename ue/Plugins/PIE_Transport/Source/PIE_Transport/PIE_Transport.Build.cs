@@ -21,6 +21,7 @@ public class PIE_Transport : ModuleRules
 			new string[]
 			{
 				"AssetRegistry",
+				"EditorScriptingUtilities",
 				"EditorStyle",
 				"EnhancedInput",
 				"InputCore",

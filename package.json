@@ -1,6 +1,6 @@
 {
   "name": "pie-transport",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "PIE record, replay, observe, and input injection for ue-mcp",
   "type": "module",
   "main": "dist/index.js",
