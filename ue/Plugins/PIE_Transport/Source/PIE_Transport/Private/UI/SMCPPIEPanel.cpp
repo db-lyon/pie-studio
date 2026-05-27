@@ -1,5 +1,5 @@
 #include "SMCPPIEPanel.h"
-#include "UE_MCP_ReplayModule.h"
+#include "PIE_TransportModule.h"
 #include "PIE/PIEInputRecorder.h"
 #include "PIE/PIEInputReplayer.h"
 #include "PIE/PIEObserver.h"

@@ -1,6 +1,6 @@
 #include "PIEInputRecorder.h"
 #include "PIETakeRecorderBridge.h"
-#include "UE_MCP_ReplayModule.h"
+#include "PIE_TransportModule.h"
 #include "Editor.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -159,7 +159,7 @@ namespace UEMCPPIE
 		{
 			FString TakeMsg;
 			const bool bStarted = TakeRecorderBridge::StartFromPanel(TakeMsg);
-			UE_LOG(LogMCPReplay, Log, TEXT("[PIE-REC] take_record: %s (%s)"),
+			UE_LOG(LogPIETransport, Log, TEXT("[PIE-REC] take_record: %s (%s)"),
 				bStarted ? TEXT("started") : TEXT("skipped"), *TakeMsg);
 		}
 
@@ -172,7 +172,7 @@ namespace UEMCPPIE
 			bEndFrameBound = true;
 		}
 
-		UE_LOG(LogMCPReplay, Log, TEXT("[PIE-REC] Armed → BeginPIE: id=%s, waiting for pawn"), *CurrentId);
+		UE_LOG(LogPIETransport, Log, TEXT("[PIE-REC] Armed → BeginPIE: id=%s, waiting for pawn"), *CurrentId);
 	}
 
 	void FPIEInputRecorder::ApplyFPSPin(UWorld* PIEWorld)
@@ -181,7 +181,7 @@ namespace UEMCPPIE
 		if (!PIEWorld || !GEngine) return;
 		const FString Cmd = FString::Printf(TEXT("t.MaxFPS %d"), Pending.PinFPS);
 		GEngine->Exec(PIEWorld, *Cmd);
-		UE_LOG(LogMCPReplay, Log, TEXT("[PIE-REC] %s"), *Cmd);
+		UE_LOG(LogPIETransport, Log, TEXT("[PIE-REC] %s"), *Cmd);
 	}
 
 	void FPIEInputRecorder::OnEndFrame()
@@ -391,7 +391,7 @@ namespace UEMCPPIE
 		// we still tear down state cleanly and report what happened.
 		if (!bHadData)
 		{
-			UE_LOG(LogMCPReplay, Log, TEXT("[PIE-REC] EndPIE without samples (id=%s)"), *CurrentId);
+			UE_LOG(LogPIETransport, Log, TEXT("[PIE-REC] EndPIE without samples (id=%s)"), *CurrentId);
 			R.bSuccess = true;
 			R.TotalFrames = 0;
 			R.DurationSeconds = 0.0;
@@ -461,7 +461,7 @@ namespace UEMCPPIE
 			const FString JsonlPath = CurrentDir / TEXT("tracked.jsonl");
 			if (!SaveTrackedActorsJSONL(JsonlPath, ActorRows, WriteErr))
 			{
-				UE_LOG(LogMCPReplay, Warning, TEXT("[PIE-REC] tracked.jsonl write failed: %s"), *WriteErr);
+				UE_LOG(LogPIETransport, Warning, TEXT("[PIE-REC] tracked.jsonl write failed: %s"), *WriteErr);
 			}
 			else
 			{
@@ -500,7 +500,7 @@ namespace UEMCPPIE
 		}
 		R.Markers = M.Markers;
 
-		UE_LOG(LogMCPReplay, Log, TEXT("[PIE-REC] Recorded %d frames (%.2fs) → %s"),
+		UE_LOG(LogPIETransport, Log, TEXT("[PIE-REC] Recorded %d frames (%.2fs) → %s"),
 			M.TotalFrames, M.DurationSeconds, *CurrentDir);
 
 		if (bEndFrameBound && OnEndFrameHandle.IsValid())

@@ -2,9 +2,9 @@ actionPrefix: "pie"
 minServerVersion: "1.0.54"
 
 nativeModule:
-  uePluginName: UE_MCP_Replay
+  uePluginName: PIE_Transport
   minBridgeApi: 1
-  source: ue/Plugins/UE_MCP_Replay
+  source: ue/Plugins/PIE_Transport
   handlers:
     inject_input: { description: "Single-frame Enhanced Input inject" }
     inject_input_start: { description: "Begin holding an Enhanced Input action" }

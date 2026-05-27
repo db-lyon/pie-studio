@@ -1,5 +1,5 @@
 #include "PIETakeRecorderBridge.h"
-#include "UE_MCP_ReplayModule.h"
+#include "PIE_TransportModule.h"
 #include "UObject/Class.h"
 #include "UObject/UObjectGlobals.h"
 #include "UObject/UnrealType.h"
@@ -106,7 +106,7 @@ namespace UEMCPPIE
 				return false;
 			}
 			OutMessage = TEXT("Take Recorder StartRecording dispatched");
-			UE_LOG(LogMCPReplay, Log, TEXT("[PIE-REC] Take Recorder StartRecording dispatched"));
+			UE_LOG(LogPIETransport, Log, TEXT("[PIE-REC] Take Recorder StartRecording dispatched"));
 			return true;
 		}
 
@@ -134,7 +134,7 @@ namespace UEMCPPIE
 				return false;
 			}
 			OutMessage = TEXT("Take Recorder StopRecording dispatched");
-			UE_LOG(LogMCPReplay, Log, TEXT("[PIE-REC] Take Recorder StopRecording dispatched"));
+			UE_LOG(LogPIETransport, Log, TEXT("[PIE-REC] Take Recorder StopRecording dispatched"));
 			return true;
 		}
 	}

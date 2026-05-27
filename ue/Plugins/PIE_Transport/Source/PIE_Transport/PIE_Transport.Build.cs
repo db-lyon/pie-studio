@@ -1,8 +1,8 @@
 using UnrealBuildTool;
 
-public class UE_MCP_Replay : ModuleRules
+public class PIE_Transport : ModuleRules
 {
-	public UE_MCP_Replay(ReadOnlyTargetRules Target) : base(Target)
+	public PIE_Transport(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 

@@ -1,7 +1,7 @@
 #include "PIEObserver.h"
 #include "MCPObservationProfile.h"
 #include "PIESequenceFormat.h"
-#include "UE_MCP_ReplayModule.h"
+#include "PIE_TransportModule.h"
 #include "Editor.h"
 #include "Engine/World.h"
 #include "HAL/FileManager.h"
@@ -185,7 +185,7 @@ namespace UEMCPPIE
 			bEndFrameBound = true;
 		}
 
-		UE_LOG(LogMCPReplay, Log, TEXT("[PIE-OBS] Armed -> BeginPIE: profile=%s run=%s"),
+		UE_LOG(LogPIETransport, Log, TEXT("[PIE-OBS] Armed -> BeginPIE: profile=%s run=%s"),
 			*FPaths::GetBaseFilename(CurrentProfilePath), *CurrentRunId);
 	}
 
@@ -211,7 +211,7 @@ namespace UEMCPPIE
 				CSVBody.Reset();
 
 				State = EObserverState::Observing;
-				UE_LOG(LogMCPReplay, Log, TEXT("[PIE-OBS] Pawn attached, observing"));
+				UE_LOG(LogPIETransport, Log, TEXT("[PIE-OBS] Pawn attached, observing"));
 			}
 			return;
 		}
@@ -275,7 +275,7 @@ namespace UEMCPPIE
 			}
 			else
 			{
-				UE_LOG(LogMCPReplay, Warning, TEXT("[PIE-OBS] CSV write failed: %s"), *Err);
+				UE_LOG(LogPIETransport, Warning, TEXT("[PIE-OBS] CSV write failed: %s"), *Err);
 			}
 		}
 
@@ -289,7 +289,7 @@ namespace UEMCPPIE
 			}
 			else
 			{
-				UE_LOG(LogMCPReplay, Warning, TEXT("[PIE-OBS] tracked.jsonl write failed: %s"), *Err);
+				UE_LOG(LogPIETransport, Warning, TEXT("[PIE-OBS] tracked.jsonl write failed: %s"), *Err);
 			}
 		}
 
@@ -353,7 +353,7 @@ namespace UEMCPPIE
 		}
 		State = EObserverState::Idle;
 
-		UE_LOG(LogMCPReplay, Log, TEXT("[PIE-OBS] Finalized: %d frames -> %s"),
+		UE_LOG(LogPIETransport, Log, TEXT("[PIE-OBS] Finalized: %d frames -> %s"),
 			FramesSampled, *CurrentOutputDir);
 		return R;
 	}

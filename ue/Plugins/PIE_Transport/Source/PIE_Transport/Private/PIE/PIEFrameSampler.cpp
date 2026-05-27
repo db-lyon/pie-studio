@@ -1,5 +1,5 @@
 #include "PIEFrameSampler.h"
-#include "UE_MCP_ReplayModule.h"
+#include "PIE_TransportModule.h"
 #include "Engine/World.h"
 #include "Engine/LocalPlayer.h"
 #include "Kismet/GameplayStatics.h"
@@ -235,7 +235,7 @@ namespace UEMCPPIE
 		DiscoverActions(PC, Pawn);
 
 		bAttached = true;
-		UE_LOG(LogMCPReplay, Log, TEXT("[PIE-SAMPLER] Attached: %d actions, %d tracked values, pawn=%s"),
+		UE_LOG(LogPIETransport, Log, TEXT("[PIE-SAMPLER] Attached: %d actions, %d tracked values, pawn=%s"),
 			Actions.Num(), TrackedValues.Num(), *PawnClassPath);
 		return true;
 	}
@@ -261,7 +261,7 @@ namespace UEMCPPIE
 			DiscoverActions(PC, Pawn);
 			for (int32 i = Before; i < Tracked.Num(); ++i)
 			{
-				UE_LOG(LogMCPReplay, Log, TEXT("[PIE-SAMPLER] Late-discovered action: %s (%s)"),
+				UE_LOG(LogPIETransport, Log, TEXT("[PIE-SAMPLER] Late-discovered action: %s (%s)"),
 					*Tracked[i].Name, *Tracked[i].Path);
 			}
 		}

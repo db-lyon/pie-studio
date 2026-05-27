@@ -1,4 +1,4 @@
-#include "UE_MCP_ReplayModule.h"
+#include "PIE_TransportModule.h"
 #include "Modules/ModuleManager.h"
 #include "MCPHandlerRegistration.h"
 #include "Handlers/GameplayHandlers.h"
@@ -11,10 +11,10 @@
 #include "Misc/CoreDelegates.h"
 #include "Containers/Ticker.h"
 
-DEFINE_LOG_CATEGORY(LogMCPReplay);
-IMPLEMENT_MODULE(FUE_MCP_ReplayModule, UE_MCP_Replay)
+DEFINE_LOG_CATEGORY(LogPIETransport);
+IMPLEMENT_MODULE(FPIE_TransportModule, PIE_Transport)
 
-void FUE_MCP_ReplayModule::StartupModule()
+void FPIE_TransportModule::StartupModule()
 {
 	UEMCPPIE::FPIEInputInjector::Init();
 	UEMCPPIE::FPIEInputRecorder::Get().Init();
@@ -103,10 +103,10 @@ void FUE_MCP_ReplayModule::StartupModule()
 		})
 	);
 
-	UE_LOG(LogMCPReplay, Log, TEXT("[ue-mcp-replay] Registered %d handlers"), 33);
+	UE_LOG(LogPIETransport, Log, TEXT("[pie-transport] Registered %d handlers"), 33);
 }
 
-void FUE_MCP_ReplayModule::ShutdownModule()
+void FPIE_TransportModule::ShutdownModule()
 {
 	SMCPPIEPanel::UnregisterToolbarButton();
 	SMCPPIEPanel::UnregisterTab();

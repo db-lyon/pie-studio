@@ -11,7 +11,7 @@
   "IsBetaVersion": true,
   "Modules": [
     {
-      "Name": "UE_MCP_Replay",
+      "Name": "PIE_Transport",
       "Type": "Editor",
       "LoadingPhase": "PostEngineInit"
     }
