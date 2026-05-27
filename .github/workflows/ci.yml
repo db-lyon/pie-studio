@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install
+        run: npm install
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install
+        run: npm install
+
+      - name: Check if version changed
+        id: version
+        run: |
+          LOCAL=$(node -p "require('./package.json').version")
+          PUBLISHED=$(npm view pie-transport version 2>/dev/null || echo "0.0.0")
+          echo "local=$LOCAL" >> "$GITHUB_OUTPUT"
+          echo "published=$PUBLISHED" >> "$GITHUB_OUTPUT"
+          if [ "$LOCAL" != "$PUBLISHED" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to npm
+        if: steps.version.outputs.changed == 'true'
+        run: npm publish --access public --provenance
