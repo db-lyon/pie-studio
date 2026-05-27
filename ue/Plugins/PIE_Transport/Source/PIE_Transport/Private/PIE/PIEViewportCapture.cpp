@@ -76,7 +76,7 @@ void FPIEViewportCapture::PostRenderViewFamily_RenderThread(
 	GraphBuilder.AddPass(
 		RDG_EVENT_NAME("MCPViewportCapture"),
 		Params,
-		ERDGPassFlags::NeverCull,
+		ERDGPassFlags::Copy | ERDGPassFlags::NeverCull,
 		[RHITex = Texture.GetReference(), W, H, Path, Counter](FRHICommandListImmediate& RHICmdList)
 		{
 			TArray<FColor> Pixels;

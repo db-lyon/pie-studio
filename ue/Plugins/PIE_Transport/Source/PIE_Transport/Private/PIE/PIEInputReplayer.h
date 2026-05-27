@@ -85,6 +85,7 @@ namespace UEMCPPIE
 		int32 ExecutedSteps = 0;
 		int32 FramesCaptured = 0;
 		FString CaptureDir;
+		FString GifPath;
 	};
 
 	class FPIEInputReplayer

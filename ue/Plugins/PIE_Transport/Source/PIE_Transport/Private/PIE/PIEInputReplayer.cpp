@@ -1,5 +1,6 @@
 #include "PIEInputReplayer.h"
 #include "PIEViewportCapture.h"
+#include "PIEGifEncoder.h"
 #include "PIEInputInjector.h"
 #include "PIE_TransportModule.h"
 #include "Editor.h"
@@ -799,6 +800,30 @@ namespace UEMCPPIE
 			R.FramesCaptured = FramesCaptured;
 			ViewportCapture->SetEnabled(false);
 			ViewportCapture.Reset();
+		}
+
+		if (!CaptureDir.IsEmpty() && FramesCaptured > 0)
+		{
+			TArray<FString> Frames;
+			IFileManager::Get().FindFiles(Frames, *(CaptureDir / TEXT("frame_*.png")), true, false);
+			Frames.Sort();
+			for (FString& F : Frames) { F = CaptureDir / F; }
+
+			if (Frames.Num() > 0)
+			{
+				const FString GifPath = CaptureDir / TEXT("replay.gif");
+				FGifEncodeParams GP;
+				GP.DelayCs = 3;
+				GP.MaxWidth = 720;
+				if (EncodeAnimatedGif(Frames, GifPath, GP))
+				{
+					R.GifPath = GifPath;
+					for (const FString& F : Frames)
+					{
+						IFileManager::Get().Delete(*F);
+					}
+				}
+			}
 		}
 
 		if (bEndFrameBound && OnEndFrameHandle.IsValid())

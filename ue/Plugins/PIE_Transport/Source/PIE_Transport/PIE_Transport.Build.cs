@@ -24,6 +24,7 @@ public class PIE_Transport : ModuleRules
 				"EditorScriptingUtilities",
 				"EditorStyle",
 				"EnhancedInput",
+				"ImageWrapper",
 				"InputCore",
 				"Kismet",
 				"LevelEditor",

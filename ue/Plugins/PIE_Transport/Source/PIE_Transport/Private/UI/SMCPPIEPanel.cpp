@@ -648,6 +648,7 @@ void SMCPPIEPanel::RefreshRecordings()
 				{
 					UEMCPPIE::FReplayerArmConfig Cfg;
 					Cfg.SourceRecordingId = Id;
+					Cfg.CaptureFrameEvery = 2;
 					FString Err, Msg;
 					UEMCPPIE::FPIEInputReplayer::Get().Arm(Cfg, Err, Msg);
 					for (const FString& ProfilePath : ActiveProfilePaths)
