@@ -220,26 +220,34 @@ void SMCPPIEPanel::RegisterToolbarButton()
 							}))
 						);
 
-						Menu.AddMenuEntry(
-							FText::FromString(TEXT("Disarm Recorder")),
-							FText::FromString(TEXT("Disarm MCP recorder")),
-							FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.X"),
-							FUIAction(FExecuteAction::CreateLambda([]()
-							{
-								FString Err;
-								UEMCPPIE::FPIEInputRecorder::Get().Disarm(Err);
-							}))
-						);
+						const auto RecState = UEMCPPIE::FPIEInputRecorder::Get().GetStatus().State;
 
-						Menu.AddMenuEntry(
-							FText::FromString(TEXT("Stop Recording")),
-							FText::FromString(TEXT("Force stop MCP recording")),
-							FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Delete"),
-							FUIAction(FExecuteAction::CreateLambda([]()
-							{
-								UEMCPPIE::FPIEInputRecorder::Get().ForceStop();
-							}))
-						);
+						if (RecState == UEMCPPIE::ERecorderState::Armed || RecState == UEMCPPIE::ERecorderState::WaitingForPawn)
+						{
+							Menu.AddMenuEntry(
+								FText::FromString(TEXT("Disarm Recorder")),
+								FText::FromString(TEXT("Disarm MCP recorder")),
+								FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.X"),
+								FUIAction(FExecuteAction::CreateLambda([]()
+								{
+									FString Err;
+									UEMCPPIE::FPIEInputRecorder::Get().Disarm(Err);
+								}))
+							);
+						}
+
+						if (RecState == UEMCPPIE::ERecorderState::Recording)
+						{
+							Menu.AddMenuEntry(
+								FText::FromString(TEXT("Stop Recording")),
+								FText::FromString(TEXT("Force stop MCP recording")),
+								FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Delete"),
+								FUIAction(FExecuteAction::CreateLambda([]()
+								{
+									UEMCPPIE::FPIEInputRecorder::Get().ForceStop();
+								}))
+							);
+						}
 
 						Menu.EndSection();
 
@@ -673,6 +681,20 @@ void SMCPPIEPanel::Tick(const FGeometry& AllottedGeometry, const double InCurren
 		ObserverStateText->SetColorAndOpacity(StateColor(bObsActive));
 	}
 
+	// Re-apply time scale if PIE is running and dilation doesn't match
+	if (CurrentTimeScale != 1.0f)
+	{
+		UWorld* World = GEditor ? GEditor->PlayWorld : nullptr;
+		if (World)
+		{
+			AWorldSettings* WS = World->GetWorldSettings();
+			if (WS && !FMath::IsNearlyEqual(UGameplayStatics::GetGlobalTimeDilation(World), CurrentTimeScale, 0.001f))
+			{
+				ApplyTimeScale(CurrentTimeScale);
+			}
+		}
+	}
+
 	// Auto-refresh lists every 5 seconds
 	if (InCurrentTime - LastRecordingsRefresh > 5.0)
 	{
@@ -720,6 +742,23 @@ void SMCPPIEPanel::RefreshRecordings()
 					Cfg.SourceRecordingId = Id;
 					FString Err, Msg;
 					UEMCPPIE::FPIEInputReplayer::Get().Arm(Cfg, Err, Msg);
+					if (GEditor && !GEditor->PlayWorld)
+					{
+						FRequestPlaySessionParams P;
+						GEditor->RequestPlaySession(P);
+					}
+					return FReply::Handled();
+				})
+			]
+			+ SHorizontalBox::Slot().AutoWidth().Padding(2, 0)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Delete")))
+				.OnClicked_Lambda([this, Id]()
+				{
+					const FString RecPath = UEMCPPIE::DefaultRecordingsRoot() / Id;
+					IFileManager::Get().DeleteDirectory(*RecPath, false, true);
+					RefreshRecordings();
 					return FReply::Handled();
 				})
 			]
