@@ -37,7 +37,6 @@ jobs:
     permissions:
       contents: write
       id-token: write
-      statuses: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,11 +46,6 @@ jobs:
         with:
           node-version: "24"
           cache: "npm"
-
-      - name: Verify npm >= 11.5.1
-        run: |
-          npm --version
-          node -e "const v=require('child_process').execSync('npm --version').toString().trim();const [maj,min,pat]=v.split('.').map(Number);if (maj < 11 || (maj===11 && min<5) || (maj===11 && min===5 && pat<1)) { console.error('npm '+v+' is below the 11.5.1 minimum for trusted publishing'); process.exit(1); }"
 
       - name: Configure git identity
         run: |
@@ -71,71 +65,23 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Validate release inputs
-        if: steps.version.outputs.changed == 'true'
-        id: release_inputs
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.version.outputs.local }}
-        run: |
-          set -euo pipefail
-
-          DRAFT_BODY=""
-          for i in $(seq 1 30); do
-            DRAFT_BODY=$(gh release view "v$VERSION" --json body,isDraft \
-              --jq 'select(.isDraft==true) | .body' 2>/dev/null || true)
-            if [ -n "$DRAFT_BODY" ]; then break; fi
-            sleep 2
-          done
-          if [ -z "$DRAFT_BODY" ]; then
-            echo "::error::No draft release v$VERSION with non-empty body found."
-            echo "Create it with:"
-            echo "  gh release create v$VERSION --draft --notes-file <path/to/notes.md>"
-            exit 1
-          fi
-          echo "Draft release v$VERSION present (${#DRAFT_BODY} chars of body)."
-
-          printf '%s' "$DRAFT_BODY" | node scripts/release-headline.mjs >> "$GITHUB_OUTPUT"
-
       - name: Install & Build
         if: steps.version.outputs.changed == 'true'
         run: |
           npm install
           npx tsc
 
-      - name: Tag release (before publish)
+      - name: Tag and publish
         if: steps.version.outputs.changed == 'true'
         run: |
           TAG="v${{ steps.version.outputs.local }}"
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists locally; skipping creation"
-          else
-            git tag "$TAG"
-          fi
+          git tag "$TAG"
           git push origin "$TAG"
+          npm publish --access public --provenance
 
-      - name: Publish to npm
-        if: steps.version.outputs.changed == 'true'
-        run: npm publish --access public --provenance
-
-      - name: Promote draft release
+      - name: Create GitHub release
         if: steps.version.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
           VERSION: ${{ steps.version.outputs.local }}
-          HEADLINE: ${{ steps.release_inputs.outputs.HEADLINE }}
-          BODY_PATH: ${{ steps.release_inputs.outputs.BODY_PATH }}
-        run: |
-          set -euo pipefail
-          gh release edit "v$VERSION" \
-            --notes-file "$BODY_PATH" \
-            --draft=false \
-            --tag "v$VERSION"
-          gh api -X POST "repos/$REPO/statuses/$SHA" \
-            -f state=success \
-            -f context=landing/headline \
-            -f description="$HEADLINE" \
-            -f target_url="https://github.com/$REPO/releases/tag/v$VERSION"
-          echo "Posted landing/headline: $HEADLINE"
+        run: gh release create "v$VERSION" --generate-notes
