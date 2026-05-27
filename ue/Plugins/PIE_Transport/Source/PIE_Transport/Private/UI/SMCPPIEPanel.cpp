@@ -11,7 +11,11 @@
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SComboButton.h"
 #include "Widgets/Input/SSlider.h"
+#include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Images/SImage.h"
+#include "EditorAssetLibrary.h"
+#include "Subsystems/AssetEditorSubsystem.h"
+#include "UObject/SavePackage.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Framework/Docking/TabManager.h"
 #include "ToolMenus.h"
@@ -635,6 +639,29 @@ TSharedRef<SWidget> SMCPPIEPanel::BuildProfilesSection()
 			+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
 			[
 				SNew(SButton)
+				.Text(FText::FromString(TEXT("Create")))
+				.OnClicked_Lambda([this]()
+				{
+					FString PackagePath = TEXT("/Game/PIETransport");
+					FString AssetName = FString::Printf(TEXT("OP_%s"), *FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")));
+					FString FullPath = PackagePath / AssetName;
+
+					UPackage* Pkg = CreatePackage(*FullPath);
+					UMCPObservationProfile* NewProfile = NewObject<UMCPObservationProfile>(Pkg, *AssetName, RF_Public | RF_Standalone);
+					FAssetRegistryModule::AssetCreated(NewProfile);
+					NewProfile->MarkPackageDirty();
+
+					FString PackageFilename = FPackageName::LongPackageNameToFilename(FullPath, FPackageName::GetAssetPackageExtension());
+					UPackage::SavePackage(Pkg, NewProfile, *PackageFilename, FSavePackageArgs());
+
+					GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OpenEditorForAsset(NewProfile);
+					RefreshProfiles();
+					return FReply::Handled();
+				})
+			]
+			+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
+			[
+				SNew(SButton)
 				.Text(FText::FromString(TEXT("Refresh")))
 				.OnClicked_Lambda([this]()
 				{
@@ -739,12 +766,19 @@ void SMCPPIEPanel::RefreshRecordings()
 				.ButtonStyle(&FAppStyle::Get().GetWidgetStyle<FButtonStyle>("SimpleButton"))
 				.ContentPadding(FMargin(2))
 				.ToolTipText(FText::FromString(TEXT("Replay")))
-				.OnClicked_Lambda([Id]()
+				.OnClicked_Lambda([this, Id]()
 				{
 					UEMCPPIE::FReplayerArmConfig Cfg;
 					Cfg.SourceRecordingId = Id;
 					FString Err, Msg;
 					UEMCPPIE::FPIEInputReplayer::Get().Arm(Cfg, Err, Msg);
+					for (const FString& ProfilePath : ActiveProfilePaths)
+					{
+						UEMCPPIE::FObserverArmConfig OCfg;
+						OCfg.ProfilePath = ProfilePath;
+						FString OErr, OMsg;
+						UEMCPPIE::FPIEObserver::Get().Arm(OCfg, OErr, OMsg);
+					}
 					if (GEditor && !GEditor->PlayWorld)
 					{
 						FRequestPlaySessionParams P;
@@ -798,24 +832,51 @@ void SMCPPIEPanel::RefreshProfiles()
 	{
 		const FString Path = A.GetObjectPathString();
 		CachedProfilePaths.Add(Path);
+		const FString Name = A.AssetName.ToString();
+		const bool bActive = ActiveProfilePaths.Contains(Path);
 
 		ProfilesListBox->AddSlot().AutoHeight().Padding(0, 2)
 		[
 			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0, 0, 4, 0)
+			[
+				SNew(SCheckBox)
+				.IsChecked(bActive ? ECheckBoxState::Checked : ECheckBoxState::Unchecked)
+				.OnCheckStateChanged_Lambda([this, Path](ECheckBoxState NewState)
+				{
+					if (NewState == ECheckBoxState::Checked)
+						ActiveProfilePaths.Add(Path);
+					else
+						ActiveProfilePaths.Remove(Path);
+				})
+			]
 			+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
 			[
-				SNew(STextBlock).Text(FText::FromString(A.AssetName.ToString()))
+				SNew(STextBlock).Text(FText::FromString(Name))
 			]
-			+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
+			+ SHorizontalBox::Slot().AutoWidth().Padding(2, 0)
 			[
 				SNew(SButton)
-				.Text(FText::FromString(TEXT("Observe")))
+				.Text(FText::FromString(TEXT("Edit")))
 				.OnClicked_Lambda([Path]()
 				{
-					UEMCPPIE::FObserverArmConfig Cfg;
-					Cfg.ProfilePath = Path;
-					FString Err, Msg;
-					UEMCPPIE::FPIEObserver::Get().Arm(Cfg, Err, Msg);
+					UObject* Asset = LoadObject<UMCPObservationProfile>(nullptr, *Path);
+					if (Asset)
+					{
+						GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OpenEditorForAsset(Asset);
+					}
+					return FReply::Handled();
+				})
+			]
+			+ SHorizontalBox::Slot().AutoWidth().Padding(2, 0)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("Delete")))
+				.OnClicked_Lambda([this, Path]()
+				{
+					UEditorAssetLibrary::DeleteAsset(Path);
+					ActiveProfilePaths.Remove(Path);
+					RefreshProfiles();
 					return FReply::Handled();
 				})
 			]

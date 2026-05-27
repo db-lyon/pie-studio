@@ -50,6 +50,37 @@ namespace UEMCPPIE
 		double DurationSeconds = 0.0;
 	};
 
+	struct FObservationSession
+	{
+		FObserverArmConfig Config;
+		EObserverState State = EObserverState::Armed;
+		FString RunId;
+		FString OutputDir;
+		FString ProfilePath;
+
+		FPIEFrameSampler Sampler;
+		FCSVHeader CSVHdr;
+		FString CSVHeaderStr;
+		FString CSVBody;
+
+		TArray<FString> TrackedValuePaths;
+		TArray<FString> TrackedActorIds;
+		TArray<FTrackedActorRow> ActorRows;
+		TMap<FString, TWeakObjectPtr<AActor>> ActorCache;
+
+		double AttachTime = 0.0;
+		int32 FramesSampled = 0;
+		FString StartedAt;
+
+		bool bCapturePawnState = true;
+		bool bCaptureMontage = true;
+		float ThrPosCm = 5.f;
+		float ThrRotDeg = 2.f;
+		float ThrVelCms = 25.f;
+		float ThrTrackedDefault = 0.f;
+		TMap<FString, float> TrackedThresholds;
+	};
+
 	class FPIEObserver
 	{
 	public:
@@ -62,44 +93,19 @@ namespace UEMCPPIE
 		bool Disarm(FString& OutError);
 		FObserverFinishResult ForceStop();
 		FObserverStatus GetStatus() const;
-		bool IsActive() const { return State != EObserverState::Idle && State != EObserverState::Completed; }
+		bool IsActive() const;
+
+		int32 NumSessions() const { return Sessions.Num(); }
 
 	private:
 		void OnBeginPIE(bool bIsSimulating);
 		void OnEndPIE(bool bIsSimulating);
 		void OnEndFrame();
-		FObserverFinishResult FinaliseCurrent();
+		FObserverFinishResult FinaliseSession(FObservationSession& S);
+		void BindEndFrame();
+		void UnbindEndFrame();
 
-		FObserverArmConfig Pending;
-		EObserverState State = EObserverState::Idle;
-		bool bArmed = false;
-
-		FString CurrentRunId;
-		FString CurrentOutputDir;
-		FString CurrentProfilePath;
-
-		FPIEFrameSampler Sampler;
-		FCSVHeader CSVHdr;
-		FString CSVHeaderStr;
-		FString CSVBody;
-
-		TArray<FString> TrackedActorIds;
-		TArray<FTrackedActorRow> ActorRows;
-		TMap<FString, TWeakObjectPtr<AActor>> ActorCache;
-
-		double AttachTime = 0.0;
-		int32 FramesSampled = 0;
-		FString StartedAt;
-
-		// Profile config extracted at arm time
-		TArray<FString> TrackedValuePaths;
-		bool bCapturePawnState = true;
-		bool bCaptureMontage = true;
-		float ThrPosCm = 5.f;
-		float ThrRotDeg = 2.f;
-		float ThrVelCms = 25.f;
-		float ThrTrackedDefault = 0.f;
-		TMap<FString, float> TrackedThresholds;
+		TArray<FObservationSession> Sessions;
 
 		FDelegateHandle BeginPIEHandle;
 		FDelegateHandle EndPIEHandle;

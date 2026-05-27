@@ -53,6 +53,7 @@ private:
 	// Profiles list
 	TSharedPtr<SVerticalBox> ProfilesListBox;
 	TArray<FString> CachedProfilePaths;
+	TSet<FString> ActiveProfilePaths;
 	double LastProfilesRefresh = 0.0;
 
 	// Time scale

@@ -67,24 +67,34 @@ namespace UEMCPPIE
 		if (EndPIEHandle.IsValid())   FEditorDelegates::EndPIE.Remove(EndPIEHandle);
 		BeginPIEHandle.Reset();
 		EndPIEHandle.Reset();
+		UnbindEndFrame();
+		Sessions.Reset();
+	}
+
+	void FPIEObserver::BindEndFrame()
+	{
+		if (!bEndFrameBound)
+		{
+			OnEndFrameHandle = FCoreDelegates::OnEndFrame.AddLambda([this]()
+			{
+				this->OnEndFrame();
+			});
+			bEndFrameBound = true;
+		}
+	}
+
+	void FPIEObserver::UnbindEndFrame()
+	{
 		if (bEndFrameBound && OnEndFrameHandle.IsValid())
 		{
 			FCoreDelegates::OnEndFrame.Remove(OnEndFrameHandle);
+			OnEndFrameHandle.Reset();
+			bEndFrameBound = false;
 		}
-		OnEndFrameHandle.Reset();
-		bEndFrameBound = false;
-		State = EObserverState::Idle;
-		bArmed = false;
 	}
 
 	bool FPIEObserver::Arm(const FObserverArmConfig& Cfg, FString& OutError, FString& OutMessage)
 	{
-		if (State == EObserverState::Observing || State == EObserverState::WaitingForPawn)
-		{
-			OutError = TEXT("Observation already in flight; pie_observe_stop first.");
-			return false;
-		}
-
 		UMCPObservationProfile* Profile = LoadObject<UMCPObservationProfile>(
 			nullptr, *Cfg.ProfilePath);
 		if (!Profile)
@@ -93,51 +103,48 @@ namespace UEMCPPIE
 			return false;
 		}
 
-		Pending = Cfg;
+		FObservationSession S;
+		S.Config = Cfg;
+		S.ProfilePath = Cfg.ProfilePath;
 
-		TrackedValuePaths.Reset();
-		TrackedThresholds.Reset();
 		for (const FMCPTrackedValueEntry& E : Profile->TrackedValues)
 		{
-			TrackedValuePaths.Add(E.Path);
+			S.TrackedValuePaths.Add(E.Path);
 			if (E.DriftThreshold > 0.f)
 			{
-				TrackedThresholds.Add(E.Path, E.DriftThreshold);
+				S.TrackedThresholds.Add(E.Path, E.DriftThreshold);
 			}
 		}
 
-		TrackedActorIds.Reset();
 		for (const FMCPTrackedActorEntry& E : Profile->TrackedActors)
 		{
-			TrackedActorIds.Add(E.ActorId);
+			S.TrackedActorIds.Add(E.ActorId);
 		}
 
-		bCapturePawnState = Profile->bCapturePawnState;
-		bCaptureMontage = Profile->bCaptureMontage;
-		ThrPosCm = Profile->PositionThresholdCm;
-		ThrRotDeg = Profile->RotationThresholdDeg;
-		ThrVelCms = Profile->VelocityThresholdCms;
-		ThrTrackedDefault = Profile->TrackedValueDefaultThreshold;
-		CurrentProfilePath = Cfg.ProfilePath;
+		S.bCapturePawnState = Profile->bCapturePawnState;
+		S.bCaptureMontage = Profile->bCaptureMontage;
+		S.ThrPosCm = Profile->PositionThresholdCm;
+		S.ThrRotDeg = Profile->RotationThresholdDeg;
+		S.ThrVelCms = Profile->VelocityThresholdCms;
+		S.ThrTrackedDefault = Profile->TrackedValueDefaultThreshold;
 
-		CurrentRunId = FString::Printf(TEXT("obs_%s"), *FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")));
+		S.RunId = FString::Printf(TEXT("obs_%s_%s"),
+			*FPaths::GetBaseFilename(Cfg.ProfilePath),
+			*FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")));
 		const FString Root = Cfg.OutputDir.IsEmpty()
 			? (FPaths::ProjectSavedDir() / TEXT("MCPObservations"))
 			: Cfg.OutputDir;
-		CurrentOutputDir = Root / CurrentRunId;
+		S.OutputDir = Root / S.RunId;
 
-		ActorRows.Reset();
-		ActorCache.Reset();
-		CSVBody.Reset();
-		FramesSampled = 0;
+		S.State = EObserverState::Armed;
 
-		bArmed = true;
-		State = EObserverState::Armed;
 		OutMessage = FString::Printf(TEXT("Armed: profile=%s run=%s values=%d actors=%d"),
 			*FPaths::GetBaseFilename(Cfg.ProfilePath),
-			*CurrentRunId,
-			TrackedValuePaths.Num(),
-			TrackedActorIds.Num());
+			*S.RunId,
+			S.TrackedValuePaths.Num(),
+			S.TrackedActorIds.Num());
+
+		Sessions.Add(MoveTemp(S));
 
 		if (GEditor && GEditor->PlayWorld)
 		{
@@ -148,130 +155,134 @@ namespace UEMCPPIE
 
 	bool FPIEObserver::Disarm(FString& OutError)
 	{
-		if (State == EObserverState::Observing || State == EObserverState::WaitingForPawn)
+		int32 Removed = Sessions.RemoveAll([](const FObservationSession& S)
 		{
-			OutError = TEXT("Observation is in flight; pie_observe_stop to finalize.");
+			return S.State == EObserverState::Armed;
+		});
+		if (Removed == 0)
+		{
+			OutError = TEXT("No armed sessions to disarm.");
 			return false;
 		}
-		bArmed = false;
-		State = EObserverState::Idle;
 		return true;
 	}
 
 	void FPIEObserver::OnBeginPIE(bool /*bIsSimulating*/)
 	{
-		if (!bArmed) return;
-		bArmed = false;
-
-		FPIEFrameSampler::FConfig SC;
-		SC.AxisThreshold = 0.15f;
-		SC.bCapturePawnState = bCapturePawnState;
-		SC.bCaptureMontage = bCaptureMontage;
-		SC.TrackedValuePaths = TrackedValuePaths;
-		SC.ClientIndex = Pending.ClientId;
-		Sampler.Reset();
-		Sampler.SetConfig(SC);
-
-		State = EObserverState::WaitingForPawn;
-		AttachTime = 0.0;
-		StartedAt = ISOTimestampNow();
-
-		if (!bEndFrameBound)
+		bool bAnyStarted = false;
+		for (FObservationSession& S : Sessions)
 		{
-			OnEndFrameHandle = FCoreDelegates::OnEndFrame.AddLambda([this]()
-			{
-				this->OnEndFrame();
-			});
-			bEndFrameBound = true;
+			if (S.State != EObserverState::Armed) continue;
+
+			FPIEFrameSampler::FConfig SC;
+			SC.AxisThreshold = 0.15f;
+			SC.bCapturePawnState = S.bCapturePawnState;
+			SC.bCaptureMontage = S.bCaptureMontage;
+			SC.TrackedValuePaths = S.TrackedValuePaths;
+			SC.ClientIndex = S.Config.ClientId;
+			S.Sampler.Reset();
+			S.Sampler.SetConfig(SC);
+
+			S.State = EObserverState::WaitingForPawn;
+			S.AttachTime = 0.0;
+			S.StartedAt = ISOTimestampNow();
+
+			UE_LOG(LogPIETransport, Log, TEXT("[PIE-OBS] Armed -> BeginPIE: profile=%s run=%s"),
+				*FPaths::GetBaseFilename(S.ProfilePath), *S.RunId);
+			bAnyStarted = true;
 		}
 
-		UE_LOG(LogPIETransport, Log, TEXT("[PIE-OBS] Armed -> BeginPIE: profile=%s run=%s"),
-			*FPaths::GetBaseFilename(CurrentProfilePath), *CurrentRunId);
+		if (bAnyStarted)
+		{
+			BindEndFrame();
+		}
 	}
 
 	void FPIEObserver::OnEndFrame()
 	{
-		if (State == EObserverState::Idle || State == EObserverState::Completed) return;
 		UWorld* PIEWorld = nullptr;
 		if (GEditor) PIEWorld = GEditor->PlayWorld;
 		if (!PIEWorld) return;
 
-		if (State == EObserverState::WaitingForPawn)
+		for (FObservationSession& S : Sessions)
 		{
-			if (Sampler.AttachToPIE(PIEWorld))
+			if (S.State == EObserverState::WaitingForPawn)
 			{
-				AttachTime = PIEWorld->GetTimeSeconds();
+				if (S.Sampler.AttachToPIE(PIEWorld))
+				{
+					S.AttachTime = PIEWorld->GetTimeSeconds();
 
-				CSVHdr = FCSVHeader();
-				CSVHdr.RecordingId = CurrentRunId;
-				CSVHdr.SampleHz = Pending.SampleHz > 0 ? Pending.SampleHz : 60;
-				CSVHdr.Actions = Sampler.GetActions();
-				CSVHdr.TrackedValues = Sampler.GetTrackedValues();
-				CSVHeaderStr = BuildCSVHeader(CSVHdr);
-				CSVBody.Reset();
+					S.CSVHdr = FCSVHeader();
+					S.CSVHdr.RecordingId = S.RunId;
+					S.CSVHdr.SampleHz = S.Config.SampleHz > 0 ? S.Config.SampleHz : 60;
+					S.CSVHdr.Actions = S.Sampler.GetActions();
+					S.CSVHdr.TrackedValues = S.Sampler.GetTrackedValues();
+					S.CSVHeaderStr = BuildCSVHeader(S.CSVHdr);
+					S.CSVBody.Reset();
 
-				State = EObserverState::Observing;
-				UE_LOG(LogPIETransport, Log, TEXT("[PIE-OBS] Pawn attached, observing"));
-			}
-			return;
-		}
-
-		if (State == EObserverState::Observing)
-		{
-			const double GameTime = PIEWorld->GetTimeSeconds();
-			const double Dt = PIEWorld->GetDeltaSeconds();
-			const uint64 FrameNum = static_cast<uint64>(FramesSampled);
-			FCSVRow Row = Sampler.SampleFrame(PIEWorld, FrameNum, GameTime, Dt);
-
-			if (TrackedActorIds.Num() > 0)
-			{
-				FTrackedActorRow AR;
-				AR.Frame = FrameNum;
-				AR.Time = GameTime;
-				SampleActors(PIEWorld, TrackedActorIds, ActorCache, AR);
-				ActorRows.Add(MoveTemp(AR));
+					S.State = EObserverState::Observing;
+					UE_LOG(LogPIETransport, Log, TEXT("[PIE-OBS] Pawn attached, observing: %s"), *S.RunId);
+				}
+				continue;
 			}
 
-			AppendCSVRow(CSVBody, Row, CSVHdr);
-			FramesSampled++;
+			if (S.State == EObserverState::Observing)
+			{
+				const double GameTime = PIEWorld->GetTimeSeconds();
+				const double Dt = PIEWorld->GetDeltaSeconds();
+				const uint64 FrameNum = static_cast<uint64>(S.FramesSampled);
+				FCSVRow Row = S.Sampler.SampleFrame(PIEWorld, FrameNum, GameTime, Dt);
+
+				if (S.TrackedActorIds.Num() > 0)
+				{
+					FTrackedActorRow AR;
+					AR.Frame = FrameNum;
+					AR.Time = GameTime;
+					SampleActors(PIEWorld, S.TrackedActorIds, S.ActorCache, AR);
+					S.ActorRows.Add(MoveTemp(AR));
+				}
+
+				AppendCSVRow(S.CSVBody, Row, S.CSVHdr);
+				S.FramesSampled++;
+			}
 		}
 	}
 
 	void FPIEObserver::OnEndPIE(bool /*bIsSimulating*/)
 	{
-		if (State == EObserverState::Idle) return;
-		FinaliseCurrent();
+		for (FObservationSession& S : Sessions)
+		{
+			if (S.State != EObserverState::Idle && S.State != EObserverState::Completed)
+			{
+				FinaliseSession(S);
+			}
+		}
+		Sessions.Reset();
+		UnbindEndFrame();
 	}
 
-	FObserverFinishResult FPIEObserver::FinaliseCurrent()
+	FObserverFinishResult FPIEObserver::FinaliseSession(FObservationSession& S)
 	{
 		FObserverFinishResult R;
-		if (State == EObserverState::Idle)
-		{
-			R.Error = TEXT("Not observing");
-			return R;
-		}
+		R.RunId = S.RunId;
+		R.OutputDir = S.OutputDir;
+		R.FramesSampled = S.FramesSampled;
 
-		R.RunId = CurrentRunId;
-		R.OutputDir = CurrentOutputDir;
-		R.FramesSampled = FramesSampled;
-
-		if (FramesSampled == 0)
+		if (S.FramesSampled == 0)
 		{
 			R.bSuccess = true;
-			State = EObserverState::Idle;
+			S.State = EObserverState::Completed;
 			return R;
 		}
 
-		IFileManager::Get().MakeDirectory(*CurrentOutputDir, true);
+		IFileManager::Get().MakeDirectory(*S.OutputDir, true);
 
-		// Write observation CSV
 		{
-			const FString FullCSV = CSVHeaderStr + CSVBody;
+			const FString FullCSV = S.CSVHeaderStr + S.CSVBody;
 			FString Err;
-			if (SaveCSV(CurrentOutputDir / TEXT("observation.csv"), FullCSV, Err))
+			if (SaveCSV(S.OutputDir / TEXT("observation.csv"), FullCSV, Err))
 			{
-				R.CSVPath = CurrentOutputDir / TEXT("observation.csv");
+				R.CSVPath = S.OutputDir / TEXT("observation.csv");
 			}
 			else
 			{
@@ -279,13 +290,12 @@ namespace UEMCPPIE
 			}
 		}
 
-		// Write tracked actors
-		if (ActorRows.Num() > 0)
+		if (S.ActorRows.Num() > 0)
 		{
 			FString Err;
-			if (SaveTrackedActorsJSONL(CurrentOutputDir / TEXT("tracked.jsonl"), ActorRows, Err))
+			if (SaveTrackedActorsJSONL(S.OutputDir / TEXT("tracked.jsonl"), S.ActorRows, Err))
 			{
-				R.TrackedActorsPath = CurrentOutputDir / TEXT("tracked.jsonl");
+				R.TrackedActorsPath = S.OutputDir / TEXT("tracked.jsonl");
 			}
 			else
 			{
@@ -293,41 +303,40 @@ namespace UEMCPPIE
 			}
 		}
 
-		// Write manifest
 		{
 			TSharedRef<FJsonObject> M = MakeShared<FJsonObject>();
 			M->SetNumberField(TEXT("version"), kFormatVersion);
 			M->SetStringField(TEXT("type"), TEXT("observation"));
-			M->SetStringField(TEXT("run_id"), CurrentRunId);
-			M->SetStringField(TEXT("profile"), CurrentProfilePath);
-			M->SetStringField(TEXT("started_at"), StartedAt);
+			M->SetStringField(TEXT("run_id"), S.RunId);
+			M->SetStringField(TEXT("profile"), S.ProfilePath);
+			M->SetStringField(TEXT("started_at"), S.StartedAt);
 			M->SetStringField(TEXT("ended_at"), ISOTimestampNow());
-			M->SetNumberField(TEXT("frames_sampled"), FramesSampled);
-			M->SetNumberField(TEXT("sample_hz"), CSVHdr.SampleHz);
+			M->SetNumberField(TEXT("frames_sampled"), S.FramesSampled);
+			M->SetNumberField(TEXT("sample_hz"), S.CSVHdr.SampleHz);
 
 			TArray<TSharedPtr<FJsonValue>> Vals;
-			for (const FString& P : TrackedValuePaths)
+			for (const FString& P : S.TrackedValuePaths)
 			{
 				Vals.Add(MakeShared<FJsonValueString>(P));
 			}
 			M->SetArrayField(TEXT("tracked_values"), Vals);
 
 			TArray<TSharedPtr<FJsonValue>> Acts;
-			for (const FString& A : TrackedActorIds)
+			for (const FString& A : S.TrackedActorIds)
 			{
 				Acts.Add(MakeShared<FJsonValueString>(A));
 			}
 			M->SetArrayField(TEXT("tracked_actors"), Acts);
 
 			TSharedRef<FJsonObject> Thr = MakeShared<FJsonObject>();
-			Thr->SetNumberField(TEXT("position_cm"), ThrPosCm);
-			Thr->SetNumberField(TEXT("rotation_deg"), ThrRotDeg);
-			Thr->SetNumberField(TEXT("velocity_cms"), ThrVelCms);
-			Thr->SetNumberField(TEXT("tracked_default"), ThrTrackedDefault);
-			if (TrackedThresholds.Num() > 0)
+			Thr->SetNumberField(TEXT("position_cm"), S.ThrPosCm);
+			Thr->SetNumberField(TEXT("rotation_deg"), S.ThrRotDeg);
+			Thr->SetNumberField(TEXT("velocity_cms"), S.ThrVelCms);
+			Thr->SetNumberField(TEXT("tracked_default"), S.ThrTrackedDefault);
+			if (S.TrackedThresholds.Num() > 0)
 			{
 				TSharedRef<FJsonObject> PerPath = MakeShared<FJsonObject>();
-				for (const TPair<FString, float>& KV : TrackedThresholds)
+				for (const TPair<FString, float>& KV : S.TrackedThresholds)
 				{
 					PerPath->SetNumberField(KV.Key, KV.Value);
 				}
@@ -338,42 +347,79 @@ namespace UEMCPPIE
 			FString JsonStr;
 			TSharedRef<TJsonWriter<>> W = TJsonWriterFactory<>::Create(&JsonStr);
 			FJsonSerializer::Serialize(M, W);
-			FFileHelper::SaveStringToFile(JsonStr, *(CurrentOutputDir / TEXT("manifest.json")),
+			FFileHelper::SaveStringToFile(JsonStr, *(S.OutputDir / TEXT("manifest.json")),
 				FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
 		}
 
 		R.bSuccess = true;
-		R.DurationSeconds = 0.0;
+		S.State = EObserverState::Completed;
 
-		if (bEndFrameBound && OnEndFrameHandle.IsValid())
-		{
-			FCoreDelegates::OnEndFrame.Remove(OnEndFrameHandle);
-			OnEndFrameHandle.Reset();
-			bEndFrameBound = false;
-		}
-		State = EObserverState::Idle;
-
-		UE_LOG(LogPIETransport, Log, TEXT("[PIE-OBS] Finalized: %d frames -> %s"),
-			FramesSampled, *CurrentOutputDir);
+		UE_LOG(LogPIETransport, Log, TEXT("[PIE-OBS] Finalized: %s %d frames -> %s"),
+			*FPaths::GetBaseFilename(S.ProfilePath), S.FramesSampled, *S.OutputDir);
 		return R;
 	}
 
 	FObserverFinishResult FPIEObserver::ForceStop()
 	{
-		return FinaliseCurrent();
+		FObserverFinishResult LastResult;
+		for (FObservationSession& S : Sessions)
+		{
+			if (S.State != EObserverState::Idle && S.State != EObserverState::Completed)
+			{
+				LastResult = FinaliseSession(S);
+			}
+		}
+		Sessions.Reset();
+		UnbindEndFrame();
+		return LastResult;
 	}
 
 	FObserverStatus FPIEObserver::GetStatus() const
 	{
-		FObserverStatus S;
-		S.State = State;
-		S.RunId = CurrentRunId;
-		S.ProfilePath = CurrentProfilePath;
-		S.FramesSampled = FramesSampled;
-		if (GEditor && GEditor->PlayWorld && AttachTime > 0.0)
+		FObserverStatus Out;
+		Out.State = EObserverState::Idle;
+
+		for (const FObservationSession& S : Sessions)
 		{
-			S.ElapsedSeconds = GEditor->PlayWorld->GetTimeSeconds() - AttachTime;
+			if (S.State == EObserverState::Observing)
+			{
+				Out.State = EObserverState::Observing;
+				Out.RunId = S.RunId;
+				Out.ProfilePath = S.ProfilePath;
+				Out.FramesSampled += S.FramesSampled;
+				if (GEditor && GEditor->PlayWorld && S.AttachTime > 0.0)
+				{
+					Out.ElapsedSeconds = FMath::Max(Out.ElapsedSeconds,
+						GEditor->PlayWorld->GetTimeSeconds() - S.AttachTime);
+				}
+			}
+			else if (S.State == EObserverState::WaitingForPawn && Out.State == EObserverState::Idle)
+			{
+				Out.State = EObserverState::WaitingForPawn;
+			}
+			else if (S.State == EObserverState::Armed && Out.State == EObserverState::Idle)
+			{
+				Out.State = EObserverState::Armed;
+			}
 		}
-		return S;
+
+		if (Out.State == EObserverState::Observing && Sessions.Num() > 1)
+		{
+			Out.RunId = FString::Printf(TEXT("%d sessions"), Sessions.Num());
+		}
+
+		return Out;
+	}
+
+	bool FPIEObserver::IsActive() const
+	{
+		for (const FObservationSession& S : Sessions)
+		{
+			if (S.State != EObserverState::Idle && S.State != EObserverState::Completed)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 }
