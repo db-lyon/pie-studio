@@ -231,7 +231,10 @@ namespace UEMCPPIE
 				const double GameTime = PIEWorld->GetTimeSeconds();
 				const double Dt = PIEWorld->GetDeltaSeconds();
 				const uint64 FrameNum = static_cast<uint64>(S.FramesSampled);
+
+				S.PrevRow = S.LastRow;
 				FCSVRow Row = S.Sampler.SampleFrame(PIEWorld, FrameNum, GameTime, Dt);
+				S.LastRow = Row;
 
 				if (S.TrackedActorIds.Num() > 0)
 				{
@@ -239,6 +242,7 @@ namespace UEMCPPIE
 					AR.Frame = FrameNum;
 					AR.Time = GameTime;
 					SampleActors(PIEWorld, S.TrackedActorIds, S.ActorCache, AR);
+					S.LastActorRow = AR;
 					S.ActorRows.Add(MoveTemp(AR));
 				}
 
@@ -421,5 +425,31 @@ namespace UEMCPPIE
 			}
 		}
 		return false;
+	}
+
+	TArray<FLiveObservationSnapshot> FPIEObserver::GetLiveSnapshots() const
+	{
+		TArray<FLiveObservationSnapshot> Out;
+		for (const FObservationSession& S : Sessions)
+		{
+			if (S.State != EObserverState::Observing) continue;
+
+			FLiveObservationSnapshot Snap;
+			Snap.ProfileName = FPaths::GetBaseFilename(S.ProfilePath);
+			Snap.RunId = S.RunId;
+			Snap.State = S.State;
+			Snap.FramesSampled = S.FramesSampled;
+			Snap.LastRow = S.LastRow;
+			Snap.PrevRow = S.PrevRow;
+			Snap.TrackedActorIds = S.TrackedActorIds;
+			Snap.LastActorRow = S.LastActorRow;
+
+			if (GEditor && GEditor->PlayWorld && S.AttachTime > 0.0)
+			{
+				Snap.ElapsedSeconds = GEditor->PlayWorld->GetTimeSeconds() - S.AttachTime;
+			}
+			Out.Add(MoveTemp(Snap));
+		}
+		return Out;
 	}
 }

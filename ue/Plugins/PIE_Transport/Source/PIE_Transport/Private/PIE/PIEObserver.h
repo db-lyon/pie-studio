@@ -79,6 +79,25 @@ namespace UEMCPPIE
 		float ThrVelCms = 25.f;
 		float ThrTrackedDefault = 0.f;
 		TMap<FString, float> TrackedThresholds;
+
+		FCSVRow LastRow;
+		FCSVRow PrevRow;
+		FTrackedActorRow LastActorRow;
+	};
+
+	struct FLiveObservationSnapshot
+	{
+		FString ProfileName;
+		FString RunId;
+		EObserverState State = EObserverState::Idle;
+		int32 FramesSampled = 0;
+		double ElapsedSeconds = 0.0;
+
+		FCSVRow LastRow;
+		FCSVRow PrevRow;
+
+		TArray<FString> TrackedActorIds;
+		FTrackedActorRow LastActorRow;
 	};
 
 	class FPIEObserver
@@ -94,6 +113,7 @@ namespace UEMCPPIE
 		FObserverFinishResult ForceStop();
 		FObserverStatus GetStatus() const;
 		bool IsActive() const;
+		TArray<FLiveObservationSnapshot> GetLiveSnapshots() const;
 
 		int32 NumSessions() const { return Sessions.Num(); }
 

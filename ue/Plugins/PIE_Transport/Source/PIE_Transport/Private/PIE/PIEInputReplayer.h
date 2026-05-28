@@ -76,6 +76,21 @@ namespace UEMCPPIE
 		int32 FramesCaptured = 0;
 	};
 
+	struct FLiveReplaySnapshot
+	{
+		EReplayerState State = EReplayerState::Idle;
+		FString SourceRecordingId;
+		int32 CurrentStep = 0;
+		int32 TotalSteps = 0;
+		double ElapsedSeconds = 0.0;
+		int32 FramesCompared = 0;
+		float MaxPositionDriftCm = 0.f;
+		float MaxVelocityDriftCms = 0.f;
+		float MaxRotationDriftDeg = 0.f;
+		int32 MontageMismatches = 0;
+		TMap<FString, float> MaxTrackedDeltas;
+	};
+
 	struct FReplayerFinishResult
 	{
 		bool bSuccess = false;
@@ -100,6 +115,7 @@ namespace UEMCPPIE
 		bool Disarm(FString& OutError);
 		FReplayerFinishResult ForceStop();
 		FReplayerStatus GetStatus() const;
+		FLiveReplaySnapshot GetLiveSnapshot() const;
 		bool IsActive() const { return State != EReplayerState::Idle && State != EReplayerState::Completed; }
 
 	private:

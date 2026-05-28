@@ -310,6 +310,12 @@ void SMCPPIEPanel::Construct(const FArguments& InArgs)
 
 			+ SVerticalBox::Slot().AutoHeight().Padding(0, 4, 0, 4)
 			[ BuildProfilesSection() ]
+
+			+ SVerticalBox::Slot().AutoHeight().Padding(0, 4)
+			[ SNew(SSeparator) ]
+
+			+ SVerticalBox::Slot().AutoHeight().Padding(0, 4, 0, 4)
+			[ BuildLiveDebugSection() ]
 		]
 	];
 }
@@ -612,6 +618,31 @@ void SMCPPIEPanel::Tick(const FGeometry& AllottedGeometry, const double InCurren
 		RefreshProfiles();
 		LastProfilesRefresh = InCurrentTime;
 	}
+
+	// Live debug: refresh every 3rd tick when expanded and active
+	if (bLiveDebugExpanded && LiveDebugContent.IsValid())
+	{
+		const bool bReplayActive = UEMCPPIE::FPIEInputReplayer::Get().IsActive();
+		const bool bObserverActive = UEMCPPIE::FPIEObserver::Get().IsActive();
+		if (bReplayActive || bObserverActive)
+		{
+			if (++LiveDebugTickCounter >= 3)
+			{
+				LiveDebugTickCounter = 0;
+				RefreshLiveDebug();
+			}
+		}
+		else if (LiveDebugContent->NumSlots() > 0)
+		{
+			LiveDebugContent->ClearChildren();
+			LiveDebugContent->AddSlot().AutoHeight()
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(TEXT("No active replay or observation")))
+				.ColorAndOpacity(FSlateColor(FLinearColor::Gray))
+			];
+		}
+	}
 }
 
 void SMCPPIEPanel::RefreshRecordings()
@@ -845,6 +876,214 @@ void SMCPPIEPanel::RefreshProfiles()
 		[
 			SNew(STextBlock)
 			.Text(FText::FromString(TEXT("No profiles found")))
+			.ColorAndOpacity(FSlateColor(FLinearColor::Gray))
+		];
+	}
+}
+
+TSharedRef<SWidget> SMCPPIEPanel::BuildLiveDebugSection()
+{
+	return SNew(SExpandableArea)
+		.InitiallyCollapsed(true)
+		.OnAreaExpansionChanged_Lambda([this](bool bExpanded) { bLiveDebugExpanded = bExpanded; })
+		.HeaderContent()
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+			[
+				SNew(STextBlock)
+				.Font(FAppStyle::GetFontStyle("BoldFont"))
+				.Text(FText::FromString(TEXT("Live Debug")))
+			]
+			+ SHorizontalBox::Slot().FillWidth(1.f)
+			+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0)
+			[
+				SNew(STextBlock)
+				.Text_Lambda([]() -> FText
+				{
+					const bool bRep = UEMCPPIE::FPIEInputReplayer::Get().IsActive();
+					const bool bObs = UEMCPPIE::FPIEObserver::Get().IsActive();
+					return FText::FromString((bRep || bObs) ? TEXT("Active") : TEXT("Idle"));
+				})
+				.ColorAndOpacity_Lambda([]() -> FSlateColor
+				{
+					const bool bRep = UEMCPPIE::FPIEInputReplayer::Get().IsActive();
+					const bool bObs = UEMCPPIE::FPIEObserver::Get().IsActive();
+					return (bRep || bObs) ? FSlateColor(FLinearColor::Green) : FSlateColor(FSlateColor::UseForeground());
+				})
+			]
+		]
+		.BodyContent()
+		[
+			SAssignNew(LiveDebugContent, SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(TEXT("No active replay or observation")))
+				.ColorAndOpacity(FSlateColor(FLinearColor::Gray))
+			]
+		];
+}
+
+namespace
+{
+	FSlateColor DeltaColor(bool bChanged)
+	{
+		return bChanged
+			? FSlateColor(FLinearColor(1.0f, 0.8f, 0.0f))
+			: FSlateColor(FSlateColor::UseForeground());
+	}
+
+	void AddPropertyRow(SVerticalBox& Box, const FString& Label, const FString& Value, bool bChanged)
+	{
+		Box.AddSlot().AutoHeight().Padding(0, 1)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(Label))
+				.MinDesiredWidth(140.f)
+				.ColorAndOpacity(FSlateColor(FLinearColor(0.6f, 0.6f, 0.6f)))
+			]
+			+ SHorizontalBox::Slot().FillWidth(1.f)
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(Value))
+				.ColorAndOpacity(DeltaColor(bChanged))
+			]
+		];
+	}
+
+	FString VecStr(const FVector& V)
+	{
+		return FString::Printf(TEXT("%.1f, %.1f, %.1f"), V.X, V.Y, V.Z);
+	}
+
+	FString RotStr(const FRotator& R)
+	{
+		return FString::Printf(TEXT("Y:%.1f P:%.1f R:%.1f"), R.Yaw, R.Pitch, R.Roll);
+	}
+}
+
+void SMCPPIEPanel::RefreshLiveDebug()
+{
+	if (!LiveDebugContent.IsValid()) return;
+	LiveDebugContent->ClearChildren();
+
+	// Replay status
+	const auto Rep = UEMCPPIE::FPIEInputReplayer::Get().GetLiveSnapshot();
+	if (Rep.State == UEMCPPIE::EReplayerState::Replaying)
+	{
+		LiveDebugContent->AddSlot().AutoHeight().Padding(0, 0, 0, 4)
+		[
+			SNew(STextBlock)
+			.Font(FAppStyle::GetFontStyle("BoldFont"))
+			.Text(FText::FromString(FString::Printf(TEXT("Replay: %s  Step %d/%d  %.1fs"),
+				*Rep.SourceRecordingId, Rep.CurrentStep, Rep.TotalSteps, Rep.ElapsedSeconds)))
+		];
+
+		// Drift summary
+		LiveDebugContent->AddSlot().AutoHeight().Padding(8, 0, 0, 2)
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight()
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(FString::Printf(
+					TEXT("Drift — Pos: %.1f cm  Vel: %.1f cm/s  Rot: %.1f°  Montage: %d  Frames: %d"),
+					Rep.MaxPositionDriftCm, Rep.MaxVelocityDriftCms, Rep.MaxRotationDriftDeg,
+					Rep.MontageMismatches, Rep.FramesCompared)))
+				.ColorAndOpacity(FSlateColor(Rep.MaxPositionDriftCm > 50.f
+					? FLinearColor(1.f, 0.3f, 0.3f)
+					: FLinearColor(0.7f, 0.7f, 0.7f)))
+			]
+		];
+
+		if (Rep.MaxTrackedDeltas.Num() > 0)
+		{
+			TSharedRef<SVerticalBox> TrackedDriftBox = SNew(SVerticalBox);
+			for (const auto& KV : Rep.MaxTrackedDeltas)
+			{
+				AddPropertyRow(*TrackedDriftBox,
+					FString::Printf(TEXT("  %s"), *KV.Key),
+					FString::Printf(TEXT("Δ %.4f"), KV.Value),
+					KV.Value > 0.01f);
+			}
+			LiveDebugContent->AddSlot().AutoHeight().Padding(8, 0, 0, 4)
+			[
+				TrackedDriftBox
+			];
+		}
+	}
+
+	// Observation profiles
+	TArray<UEMCPPIE::FLiveObservationSnapshot> Snaps = UEMCPPIE::FPIEObserver::Get().GetLiveSnapshots();
+	for (const auto& Snap : Snaps)
+	{
+		LiveDebugContent->AddSlot().AutoHeight().Padding(0, 4, 0, 0)
+		[
+			SNew(STextBlock)
+			.Font(FAppStyle::GetFontStyle("BoldFont"))
+			.Text(FText::FromString(FString::Printf(TEXT("Profile: %s  F:%d  %.1fs"),
+				*Snap.ProfileName, Snap.FramesSampled, Snap.ElapsedSeconds)))
+		];
+
+		TSharedRef<SVerticalBox> PropsBox = SNew(SVerticalBox);
+
+		// Pawn state
+		const auto& Cur = Snap.LastRow;
+		const auto& Prev = Snap.PrevRow;
+
+		AddPropertyRow(*PropsBox, TEXT("Position"), VecStr(Cur.PawnLocation),
+			!(Cur.PawnLocation - Prev.PawnLocation).IsNearlyZero(0.1));
+		AddPropertyRow(*PropsBox, TEXT("Rotation"), RotStr(Cur.PawnRotation),
+			!(Cur.PawnRotation - Prev.PawnRotation).IsNearlyZero(0.1));
+		AddPropertyRow(*PropsBox, TEXT("Velocity"), VecStr(Cur.PawnVelocity),
+			!(Cur.PawnVelocity - Prev.PawnVelocity).IsNearlyZero(0.1));
+		AddPropertyRow(*PropsBox, TEXT("Speed2D"),
+			FString::Printf(TEXT("%.1f"), Cur.Speed2D),
+			!FMath::IsNearlyEqual(Cur.Speed2D, Prev.Speed2D, 0.1f));
+
+		if (!Cur.MontageSection.IsEmpty())
+		{
+			AddPropertyRow(*PropsBox, TEXT("Montage"), Cur.MontageSection,
+				Cur.MontageSection != Prev.MontageSection);
+		}
+
+		// Tracked values
+		for (const auto& KV : Cur.TrackedValues)
+		{
+			const double* PrevVal = Prev.TrackedValues.Find(KV.Key);
+			const bool bChanged = !PrevVal || !FMath::IsNearlyEqual(KV.Value, *PrevVal, 0.0001);
+			AddPropertyRow(*PropsBox, KV.Key,
+				FString::Printf(TEXT("%.4f"), KV.Value), bChanged);
+		}
+
+		// Tracked actors
+		for (const auto& KV : Snap.LastActorRow.Actors)
+		{
+			if (!KV.Value.bResolved) continue;
+			AddPropertyRow(*PropsBox,
+				FString::Printf(TEXT("[%s] Pos"), *KV.Key),
+				VecStr(KV.Value.Location), true);
+			AddPropertyRow(*PropsBox,
+				FString::Printf(TEXT("[%s] Rot"), *KV.Key),
+				RotStr(KV.Value.Rotation), true);
+		}
+
+		LiveDebugContent->AddSlot().AutoHeight().Padding(8, 0, 0, 0)
+		[
+			PropsBox
+		];
+	}
+
+	if (Rep.State != UEMCPPIE::EReplayerState::Replaying && Snaps.Num() == 0)
+	{
+		LiveDebugContent->AddSlot().AutoHeight()
+		[
+			SNew(STextBlock)
+			.Text(FText::FromString(TEXT("Waiting for data...")))
 			.ColorAndOpacity(FSlateColor(FLinearColor::Gray))
 		];
 	}

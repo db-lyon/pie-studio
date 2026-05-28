@@ -864,4 +864,24 @@ namespace UEMCPPIE
 		S.FramesCaptured = FramesCaptured;
 		return S;
 	}
+
+	FLiveReplaySnapshot FPIEInputReplayer::GetLiveSnapshot() const
+	{
+		FLiveReplaySnapshot S;
+		S.State = State;
+		S.SourceRecordingId = Pending.SourceRecordingId;
+		S.CurrentStep = NextStepIndex;
+		S.TotalSteps = ActiveSequence.Steps.Num();
+		S.FramesCompared = FramesCompared;
+		S.MaxPositionDriftCm = MaxPosDriftCm;
+		S.MaxVelocityDriftCms = MaxVelDriftCms;
+		S.MaxRotationDriftDeg = MaxRotDriftDeg;
+		S.MontageMismatches = MontageMismatches;
+		S.MaxTrackedDeltas = MaxTrackedDeltas;
+		if (GEditor && GEditor->PlayWorld && AttachTime > 0.0)
+		{
+			S.ElapsedSeconds = GEditor->PlayWorld->GetTimeSeconds() - AttachTime;
+		}
+		return S;
+	}
 }

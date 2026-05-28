@@ -32,11 +32,13 @@ private:
 	TSharedRef<SWidget> BuildTimeScaleSection();
 	TSharedRef<SWidget> BuildRecordingsSection();
 	TSharedRef<SWidget> BuildProfilesSection();
+	TSharedRef<SWidget> BuildLiveDebugSection();
 
 	void ApplyTimeScale(float Scale);
 
 	void RefreshRecordings();
 	void RefreshProfiles();
+	void RefreshLiveDebug();
 
 	TSharedPtr<STextBlock> RecorderStateText;
 
@@ -55,4 +57,9 @@ private:
 	// Time scale
 	TSharedPtr<STextBlock> TimeScaleText;
 	float CurrentTimeScale = 1.0f;
+
+	// Live debug
+	TSharedPtr<SVerticalBox> LiveDebugContent;
+	bool bLiveDebugExpanded = false;
+	int32 LiveDebugTickCounter = 0;
 };
