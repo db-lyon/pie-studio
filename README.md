@@ -12,7 +12,7 @@ This installs the npm package, deploys the native C++ module to your project's `
 
 ## Editor UI
 
-PIE Transport adds a toolbar button group to the UE5 editor (next to the Play controls) and a dockable panel accessible from the three-dot dropdown or **Tools > MCP PIE**.
+PIE Studio adds a toolbar button group to the UE5 editor (next to the Play controls) and a dockable panel accessible from the three-dot dropdown or **Tools > PIE Studio**.
 
 ### Toolbar
 

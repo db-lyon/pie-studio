@@ -117,13 +117,13 @@ void SMCPPIEPanel::RegisterTab()
 		{
 			return SNew(SDockTab)
 				.TabRole(NomadTab)
-				.Label(FText::FromString(TEXT("MCP PIE")))
+				.Label(FText::FromString(TEXT("PIE Studio")))
 				[
 					SNew(SMCPPIEPanel)
 				];
 		}))
-		.SetDisplayName(FText::FromString(TEXT("MCP PIE")))
-		.SetTooltipText(FText::FromString(TEXT("PIE Record / Replay / Observe")))
+		.SetDisplayName(FText::FromString(TEXT("PIE Studio")))
+		.SetTooltipText(FText::FromString(TEXT("PIE Studio — Record / Replay / Observe")))
 		.SetGroup(WorkspaceMenu::GetMenuStructure().GetToolsCategory());
 }
 
@@ -258,8 +258,8 @@ void SMCPPIEPanel::RegisterToolbarButton()
 
 						Menu.BeginSection("Panel", FText::FromString(TEXT("Panel")));
 						Menu.AddMenuEntry(
-							FText::FromString(TEXT("Open PIE Transport Panel")),
-							FText::FromString(TEXT("Open the full PIE Transport control panel")),
+							FText::FromString(TEXT("Open PIE Studio Panel")),
+							FText::FromString(TEXT("Open the full PIE Studio control panel")),
 							FSlateIcon(),
 							FUIAction(FExecuteAction::CreateLambda([]()
 							{
@@ -269,7 +269,7 @@ void SMCPPIEPanel::RegisterToolbarButton()
 						Menu.EndSection();
 					}),
 					FText::GetEmpty(),
-					FText::FromString(TEXT("PIE Transport Options")));
+					FText::FromString(TEXT("PIE Studio Options")));
 			ComboEntry.StyleNameOverride = FName("Toolbar.BackplateRightCombo");
 			InSection.AddEntry(ComboEntry);
 		}
