@@ -126,6 +126,26 @@ nativeModule:
         capture_frame_every: { type: number,  description: "Capture a viewport frame every N steps" }
         client_id:           { type: number }
         drift_thresholds:    { type: object,  description: "position_cm / rotation_deg / velocity_cms / tracked overrides" }
+    replay_run:
+      description: "Unattended replay: arm + start PIE in one call (no human Play), auto-stops PIE and writes drift.json when done. Poll replay_status until pie_active=false, then read drift. Accepts the same params as replay_arm."
+      schema:
+        recording_id:        { type: string,  description: "Source recording id" }
+        recording_dir:       { type: string,  description: "Recording folder (used as the source when no recording_id/sequence_path is given)" }
+        sequence_path:       { type: string,  description: "Explicit sequence.json path" }
+        steps:               { type: array,   description: "Inline step array (alternative to a recording)" }
+        settle_ms:           { type: number,  description: "Settle delay before playback (default 500)" }
+        sample_hz:           { type: number }
+        rng_seed:            { type: number }
+        pin_fps:             { type: number }
+        apply_rng_seed:      { type: boolean, description: "Re-apply recorded seed (default true)" }
+        record_drift:        { type: boolean, description: "Record drift vs source (default true)" }
+        auto_stop_pie:       { type: boolean, description: "End PIE when the run completes (default true for replay_run)" }
+        eject:               { type: boolean, description: "Eject to spectator during replay" }
+        time_scale:          { type: number,  description: "Playback speed multiplier (default 1)" }
+        mode:                { type: string,  description: "replay | monitor (default replay)" }
+        capture_frame_every: { type: number,  description: "Capture a viewport frame every N steps (encodes a GIF on finish)" }
+        client_id:           { type: number }
+        drift_thresholds:    { type: object,  description: "position_cm / rotation_deg / velocity_cms / tracked overrides" }
     replay_disarm:
       description: "Cancel an armed replay"
     replay_stop:

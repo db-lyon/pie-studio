@@ -123,7 +123,7 @@ TSharedPtr<FJsonValue> FGameplayHandlers::PieRecordDiff(const TSharedPtr<FJsonOb
 			double D = 0;
 			if (KV.Value.IsValid() && KV.Value->TryGetNumber(D))
 			{
-				TrackedThresholds.Add(KV.Key, D);
+				TrackedThresholds.Add(FString(*KV.Key), D);
 			}
 		}
 	}

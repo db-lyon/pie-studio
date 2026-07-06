@@ -299,6 +299,7 @@ namespace UEMCPPIE
 		NextStepIndex = 0;
 		ExecutedSteps = 0;
 		ActiveHolds.Reset();
+		bEndPIERequested = false;
 
 		FString Err;
 		if (Cfg.bInlineSequenceProvided)
@@ -735,6 +736,20 @@ namespace UEMCPPIE
 				}
 			}
 		}
+
+		// Unattended replay: once the run is Completed, end PIE ourselves so a
+		// caller who never touches the editor (replay_run) gets a finalized
+		// drift.json without a human clicking Stop. FinaliseCurrent runs from
+		// the resulting EndPIE. Guarded so we ask exactly once.
+		if (State == EReplayerState::Completed && Pending.bAutoStopPIE && !bEndPIERequested)
+		{
+			bEndPIERequested = true;
+			if (GEditor)
+			{
+				UE_LOG(LogPIEStudio, Log, TEXT("[PIE-REP] Replay complete → auto-stopping PIE"));
+				GEditor->RequestEndPlayMap();
+			}
+		}
 	}
 
 	void FPIEInputReplayer::OnEndPIE(bool /*bIsSimulating*/)
@@ -839,6 +854,11 @@ namespace UEMCPPIE
 			bEndFrameBound = false;
 		}
 		State = EReplayerState::Idle;
+		bEndPIERequested = false;
+		// Retain the outcome so a poller (replay_status) can read the drift
+		// report after we have dropped back to Idle.
+		LastFinish = R;
+		bHasLastFinish = true;
 		return R;
 	}
 
@@ -862,6 +882,16 @@ namespace UEMCPPIE
 		S.MaxPositionDriftCm = MaxPosDriftCm;
 		S.MaxVelocityDriftCms = MaxVelDriftCms;
 		S.FramesCaptured = FramesCaptured;
+		S.bPIEActive = (GEditor && GEditor->PlayWorld != nullptr);
+		if (bHasLastFinish)
+		{
+			S.bHasLastResult = true;
+			S.LastDriftReportPath = LastFinish.DriftReportPath;
+			S.LastGifPath = LastFinish.GifPath;
+			S.LastMaxPositionDriftCm = LastFinish.Drift.MaxPositionDriftCm;
+			S.LastMaxVelocityDriftCms = LastFinish.Drift.MaxVelocityDriftCms;
+			S.LastFramesCompared = LastFinish.Drift.FramesCompared;
+		}
 		return S;
 	}
 

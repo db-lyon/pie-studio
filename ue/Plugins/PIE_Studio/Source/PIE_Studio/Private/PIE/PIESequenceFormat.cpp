@@ -570,7 +570,7 @@ namespace UEMCPPIE
 				double D2 = 0;
 				if (KV.Value.IsValid() && KV.Value->TryGetNumber(D2))
 				{
-					Out.TrackedValueMaxDeltas.Add(KV.Key, static_cast<float>(D2));
+					Out.TrackedValueMaxDeltas.Add(FString(*KV.Key), static_cast<float>(D2));
 				}
 			}
 		}
@@ -590,7 +590,7 @@ namespace UEMCPPIE
 				int32 Unresolved = 0;
 				(*AO)->TryGetNumberField(TEXT("frames_unresolved_in_source"), Unresolved); AcDr.FramesUnresolvedInSource = Unresolved;
 				Unresolved = 0; (*AO)->TryGetNumberField(TEXT("frames_unresolved_in_replay"), Unresolved); AcDr.FramesUnresolvedInReplay = Unresolved;
-				Out.ActorDrift.Add(KV.Key, AcDr);
+				Out.ActorDrift.Add(FString(*KV.Key), AcDr);
 			}
 		}
 
@@ -853,7 +853,7 @@ namespace UEMCPPIE
 							S.Velocity = FVector((*Vel)[0]->AsNumber(), (*Vel)[1]->AsNumber(), (*Vel)[2]->AsNumber());
 						}
 					}
-					Row.Actors.Add(KV.Key, S);
+					Row.Actors.Add(FString(*KV.Key), S);
 				}
 			}
 			OutRows.Add(Row);

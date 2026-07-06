@@ -51,6 +51,7 @@ void FPIE_StudioModule::StartupModule()
 
 	// Replay
 	UEMCP::RegisterExternalHandler(TEXT("replay_arm"), &FGameplayHandlers::PieReplayArm);
+	UEMCP::RegisterExternalHandler(TEXT("replay_run"), &FGameplayHandlers::PieReplayRun);
 	UEMCP::RegisterExternalHandler(TEXT("replay_disarm"), &FGameplayHandlers::PieReplayDisarm);
 	UEMCP::RegisterExternalHandler(TEXT("replay_stop"), &FGameplayHandlers::PieReplayStop);
 	UEMCP::RegisterExternalHandler(TEXT("replay_status"), &FGameplayHandlers::PieReplayStatus);
@@ -103,7 +104,7 @@ void FPIE_StudioModule::StartupModule()
 		})
 	);
 
-	UE_LOG(LogPIEStudio, Log, TEXT("[pie-studio] Registered %d handlers"), 33);
+	UE_LOG(LogPIEStudio, Log, TEXT("[pie-studio] Registered %d handlers"), 34);
 }
 
 void FPIE_StudioModule::ShutdownModule()
@@ -126,6 +127,7 @@ void FPIE_StudioModule::ShutdownModule()
 	UEMCP::UnregisterExternalHandler(TEXT("record_delete"));
 	UEMCP::UnregisterExternalHandler(TEXT("mark"));
 	UEMCP::UnregisterExternalHandler(TEXT("replay_arm"));
+	UEMCP::UnregisterExternalHandler(TEXT("replay_run"));
 	UEMCP::UnregisterExternalHandler(TEXT("replay_disarm"));
 	UEMCP::UnregisterExternalHandler(TEXT("replay_stop"));
 	UEMCP::UnregisterExternalHandler(TEXT("replay_status"));

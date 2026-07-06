@@ -1,6 +1,6 @@
 # pie-studio
 
-PIE record, replay, observe, and input injection for [ue-mcp](https://github.com/db-lyon/ue-mcp).
+PIE record, replay, observe, and input injection for [ue-mcp](https://github.com/db-lyon/ue-mcp). Built for **Unreal Engine 5.8**.
 
 ## Install
 
@@ -55,12 +55,25 @@ Observation profiles are UDataAssets that control what gets sampled during repla
 
 Every replay automatically captures viewport frames and encodes an animated GIF (no external dependencies — built-in LZW encoder). GIFs are saved to `<recording>/captures/replay_<timestamp>.gif`, scaled to max 720px wide.
 
+## Unattended replay
+
+`replay_run` lets an AI agent drive a recording end-to-end with no human touching the editor. It arms the replayer **and** starts PIE in a single call, then ends PIE and writes `drift.json` when the run completes. So "hey Claude, solve this bug in `./some-recording`" becomes:
+
+```
+pie(action="replay_run", recording_dir="C:/proj/Saved/MCPRecordings/some-recording")
+# poll until PIE has torn down:
+pie(action="replay_status")            # -> pie_active: false, last_result: { drift_report_path, ... }
+pie(action="record_read", id="some-recording", file="drift")
+```
+
+`replay_run` takes the same params as `replay_arm` (`recording_id`, inline `steps`, `time_scale`, `drift_thresholds`, `capture_frame_every`, …). It defaults `auto_stop_pie=true`; pass `false` to leave PIE up for inspection. `recording_dir` alone names the source folder directly. Contrast with `replay_arm`, which only arms and still needs a separate `editor(action="play_in_editor")` (and a human) to start PIE.
+
 ## MCP Actions
 
-33 actions in the `pie` category (provisioned by the plugin; call as `pie(action="...")`):
+34 actions in the `pie` category (provisioned by the plugin; call as `pie(action="...")`):
 
 - **Recording** — `record_arm`, `record_disarm`, `record_stop`, `record_status`, `record_list`, `record_read`, `record_delete`, `mark`
-- **Replay** — `replay_arm`, `replay_disarm`, `replay_stop`, `replay_status` with drift tracking and viewport capture
+- **Replay** — `replay_arm`, `replay_run` (unattended), `replay_disarm`, `replay_stop`, `replay_status` with drift tracking and viewport capture
 - **Observation** — `observe_arm`, `observe_disarm`, `observe_stop`, `observe_status`, `observe_list`, `observe_read` with profile-based sampling
 - **Input injection** — `inject_input`, `inject_input_start`, `inject_input_update`, `inject_input_stop`, `inject_input_tape`
 - **Profiles** — `profile_create`, `profile_read`, `profile_update`, `profile_delete`, `profile_list`

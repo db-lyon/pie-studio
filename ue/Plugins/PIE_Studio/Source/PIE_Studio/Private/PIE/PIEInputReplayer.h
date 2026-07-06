@@ -74,6 +74,18 @@ namespace UEMCPPIE
 		float MaxPositionDriftCm = 0.f;
 		float MaxVelocityDriftCms = 0.f;
 		int32 FramesCaptured = 0;
+		// True while a PIE session is live. Lets an unattended caller that
+		// kicked off replay_run poll until PIE has torn itself down.
+		bool bPIEActive = false;
+		// Snapshot of the most recent finished replay, retained after the
+		// replayer returns to Idle so a poller can read the outcome (drift
+		// report path + peak drift) without racing the finalize.
+		bool bHasLastResult = false;
+		FString LastDriftReportPath;
+		FString LastGifPath;
+		float LastMaxPositionDriftCm = 0.f;
+		float LastMaxVelocityDriftCms = 0.f;
+		int32 LastFramesCompared = 0;
 	};
 
 	struct FLiveReplaySnapshot
@@ -146,6 +158,14 @@ namespace UEMCPPIE
 		FSequence ActiveSequence;
 		EReplayerState State = EReplayerState::Idle;
 		bool bArmed = false;
+
+		// Retained outcome of the last finished replay (see FReplayerStatus).
+		FReplayerFinishResult LastFinish;
+		bool bHasLastFinish = false;
+		// Set once we have asked the editor to end PIE for an auto-stop replay,
+		// so OnEndFrame doesn't spam RequestEndPlayMap every frame while the
+		// session winds down.
+		bool bEndPIERequested = false;
 
 		FString CurrentSourceCSV;
 		FString CurrentDriftPath;
