@@ -48,6 +48,7 @@ public:
 	static TSharedPtr<FJsonValue> PieReplayStop(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> PieReplayStatus(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> PieReplayAnalyze(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieReplayState(const TSharedPtr<FJsonObject>& Params);
 
 	// Diff / Snapshot
 	static TSharedPtr<FJsonValue> PieRecordDiff(const TSharedPtr<FJsonObject>& Params);

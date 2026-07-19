@@ -153,6 +153,14 @@ nativeModule:
       schema:
         recording_id:  { type: string, description: "Source recording id" }
         recording_dir: { type: string, description: "Recording folder (used directly when no id is given)" }
+    replay_state:
+      description: "Deterministic state replay: return the exact recorded pawn transform at a time/frame (scrub/snapshot), interpolated. Zero drift (nothing is simulated). Optionally apply the recorded pose to the live PIE pawn."
+      schema:
+        recording_id:  { type: string,  description: "Source recording id" }
+        recording_dir: { type: string,  description: "Recording folder (used directly when no id is given)" }
+        at_time:       { type: number,  description: "Seconds to sample (interpolated). Omit for the last frame" }
+        at_frame:      { type: number,  description: "Frame index to sample (alternative to at_time)" }
+        apply:         { type: boolean, description: "Teleport the live PIE pawn to the recorded pose (default false)" }
     replay_disarm:
       description: "Cancel an armed replay"
     replay_stop:
