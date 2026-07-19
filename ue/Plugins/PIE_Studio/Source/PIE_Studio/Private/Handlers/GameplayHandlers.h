@@ -24,6 +24,11 @@ public:
 	static TSharedPtr<FJsonValue> PieTraceStop(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> PiePerfSummary(const TSharedPtr<FJsonObject>& Params);
 
+	// Reproduction tests
+	static TSharedPtr<FJsonValue> PieTestScaffold(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieTestRun(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieTestList(const TSharedPtr<FJsonObject>& Params);
+
 	// Input injection
 	static TSharedPtr<FJsonValue> InjectInput(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> InjectInputStart(const TSharedPtr<FJsonObject>& Params);

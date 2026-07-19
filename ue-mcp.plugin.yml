@@ -168,6 +168,31 @@ nativeModule:
     replay_status:
       description: "Replayer state poll"
 
+    # ── Reproduction tests ────────────────────────────────────────
+    test_scaffold:
+      description: "Turn a recording into a durable, self-verifying test.json: assertions on max drift + max errors. Run it with test_run."
+      schema:
+        recording_id:           { type: string, description: "Source recording id" }
+        recording_dir:          { type: string, description: "Recording folder (used directly when no id is given)" }
+        name:                   { type: string, description: "Test name (default repro)" }
+        max_position_drift_cm:  { type: number, description: "Assertion: max allowed position drift (default 10)" }
+        max_velocity_drift_cms: { type: number, description: "Assertion: max allowed velocity drift (default 50)" }
+        max_rotation_drift_deg: { type: number, description: "Assertion: max allowed rotation drift (default 5)" }
+        max_errors:             { type: number, description: "Assertion: max errors logged during the run (default 0)" }
+    test_run:
+      description: "Run a scaffolded reproduction test: replays the recording (auto_run) then checks the finalised drift.json + error count against the assertions. Returns passed + failures + artifacts."
+      schema:
+        test_path:     { type: string,  description: "Explicit test.json path" }
+        recording_id:  { type: string,  description: "Recording id (with name) to locate the test" }
+        recording_dir: { type: string,  description: "Recording folder to locate the test" }
+        name:          { type: string,  description: "Test name (default repro)" }
+        auto_run:      { type: boolean, description: "Drive the replay if no drift.json exists yet (default true)" }
+    test_list:
+      description: "List scaffolded reproduction tests (all recordings, or one when recording_id/dir is given)."
+      schema:
+        recording_id:  { type: string }
+        recording_dir: { type: string }
+
     # ── Offline diff ──────────────────────────────────────────────
     record_diff:
       description: "Diff two recordings"

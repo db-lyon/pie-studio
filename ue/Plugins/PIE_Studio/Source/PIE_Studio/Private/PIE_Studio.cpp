@@ -94,6 +94,11 @@ void FPIE_StudioModule::StartupModule()
 	UEMCP::RegisterExternalHandler(TEXT("trace_stop"), &FGameplayHandlers::PieTraceStop);
 	UEMCP::RegisterExternalHandler(TEXT("perf_summary"), &FGameplayHandlers::PiePerfSummary);
 
+	// Reproduction tests
+	UEMCP::RegisterExternalHandler(TEXT("test_scaffold"), &FGameplayHandlers::PieTestScaffold);
+	UEMCP::RegisterExternalHandler(TEXT("test_run"), &FGameplayHandlers::PieTestRun);
+	UEMCP::RegisterExternalHandler(TEXT("test_list"), &FGameplayHandlers::PieTestList);
+
 	// CPU throttle suppression while recording/replaying/observing
 	FTSTicker::GetCoreTicker().AddTicker(
 		FTickerDelegate::CreateLambda([](float) -> bool
@@ -118,7 +123,7 @@ void FPIE_StudioModule::StartupModule()
 		})
 	);
 
-	UE_LOG(LogPIEStudio, Log, TEXT("[pie-studio] Registered %d handlers"), 42);
+	UE_LOG(LogPIEStudio, Log, TEXT("[pie-studio] Registered %d handlers"), 45);
 }
 
 void FPIE_StudioModule::ShutdownModule()
@@ -169,6 +174,9 @@ void FPIE_StudioModule::ShutdownModule()
 	UEMCP::UnregisterExternalHandler(TEXT("trace_start"));
 	UEMCP::UnregisterExternalHandler(TEXT("trace_stop"));
 	UEMCP::UnregisterExternalHandler(TEXT("perf_summary"));
+	UEMCP::UnregisterExternalHandler(TEXT("test_scaffold"));
+	UEMCP::UnregisterExternalHandler(TEXT("test_run"));
+	UEMCP::UnregisterExternalHandler(TEXT("test_list"));
 
 	UEMCPPIE::FPIESessionLog::Get().Shutdown();
 	UEMCPPIE::FPIEObserver::Get().Shutdown();
