@@ -230,7 +230,7 @@ namespace UEMCPPIE
 			return false;
 		}
 		Out.Version = V;
-		if (Out.Version != kFormatVersion)
+		if (Out.Version > kFormatVersion || Out.Version < 1)
 		{
 			OutError = FString::Printf(TEXT("manifest: unsupported version %d (expected %d)"), Out.Version, kFormatVersion);
 			return false;
@@ -441,7 +441,7 @@ namespace UEMCPPIE
 			return false;
 		}
 		Out.Version = V;
-		if (Out.Version != kFormatVersion)
+		if (Out.Version > kFormatVersion || Out.Version < 1)
 		{
 			OutError = FString::Printf(TEXT("sequence: unsupported version %d (expected %d)"), Out.Version, kFormatVersion);
 			return false;

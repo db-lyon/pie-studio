@@ -125,6 +125,7 @@ nativeModule:
         mode:                { type: string,  description: "replay | monitor (default replay)" }
         capture_frame_every: { type: number,  description: "Capture a viewport frame every N steps" }
         encode_gif:          { type: boolean, description: "Also encode an animated GIF from captured frames (default false; frames + contact sheet are the useful artifacts)" }
+        fixed_timestep:      { type: boolean, description: "Drive the engine at a fixed 1/pin_fps delta during replay for stronger reproducibility (default false; not full determinism)" }
         client_id:           { type: number }
         drift_thresholds:    { type: object,  description: "position_cm / rotation_deg / velocity_cms / tracked overrides" }
     replay_run:
@@ -146,6 +147,7 @@ nativeModule:
         mode:                { type: string,  description: "replay | monitor (default replay)" }
         capture_frame_every: { type: number,  description: "Capture a viewport frame every N steps (keeps JPEG frames + builds a contact sheet)" }
         encode_gif:          { type: boolean, description: "Also encode an animated GIF on finish (default false)" }
+        fixed_timestep:      { type: boolean, description: "Fixed 1/pin_fps timestep during replay for stronger reproducibility (default false)" }
         client_id:           { type: number }
         drift_thresholds:    { type: object,  description: "position_cm / rotation_deg / velocity_cms / tracked overrides" }
     replay_analyze:

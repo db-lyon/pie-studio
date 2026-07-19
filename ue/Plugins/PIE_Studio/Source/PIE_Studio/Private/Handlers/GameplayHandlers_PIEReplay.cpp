@@ -112,6 +112,7 @@ namespace
 		Cfg.bRecordDrift  = OptionalBool(Params, TEXT("record_drift"), true);
 		Cfg.bAutoStopPIE  = OptionalBool(Params, TEXT("auto_stop_pie"), false);
 		Cfg.bEncodeGif    = OptionalBool(Params, TEXT("encode_gif"), false);
+		Cfg.bFixedTimestep = OptionalBool(Params, TEXT("fixed_timestep"), false);
 		Cfg.bEject        = OptionalBool(Params, TEXT("eject"), false);
 		Cfg.TimeScale     = static_cast<float>(OptionalNumber(Params, TEXT("time_scale"), 1.0));
 		const FString Mode = OptionalString(Params, TEXT("mode"), TEXT("replay")).ToLower();

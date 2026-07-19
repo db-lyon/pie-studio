@@ -15,6 +15,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "HAL/PlatformFileManager.h"
 #include "HAL/FileManager.h"
+#include "Misc/App.h"
 #include "Misc/CoreDelegates.h"
 #include "Misc/DateTime.h"
 #include "Misc/FileHelper.h"
@@ -398,6 +399,32 @@ namespace UEMCPPIE
 		const FString Cmd = FString::Printf(TEXT("t.MaxFPS %d"), Hz);
 		GEngine->Exec(PIEWorld, *Cmd);
 		UE_LOG(LogPIEStudio, Log, TEXT("[PIE-REP] %s"), *Cmd);
+
+		// Item X2: opt-in fixed timestep for stronger reproducibility.
+		if (Pending.bFixedTimestep)
+		{
+			ApplyFixedTimestep(Hz);
+		}
+	}
+
+	void FPIEInputReplayer::ApplyFixedTimestep(int32 Hz)
+	{
+		if (bFixedTimestepApplied || Hz <= 0) return;
+		bSavedUseFixedTimestep = FApp::UseFixedTimeStep();
+		bSavedFixedDeltaTime = FApp::GetFixedDeltaTime();
+		FApp::SetFixedDeltaTime(1.0 / static_cast<double>(Hz));
+		FApp::SetUseFixedTimeStep(true);
+		bFixedTimestepApplied = true;
+		UE_LOG(LogPIEStudio, Log, TEXT("[PIE-REP] Fixed timestep on: %.4f s (%d Hz)"), 1.0 / Hz, Hz);
+	}
+
+	void FPIEInputReplayer::RestoreFixedTimestep()
+	{
+		if (!bFixedTimestepApplied) return;
+		FApp::SetUseFixedTimeStep(bSavedUseFixedTimestep);
+		FApp::SetFixedDeltaTime(bSavedFixedDeltaTime);
+		bFixedTimestepApplied = false;
+		UE_LOG(LogPIEStudio, Log, TEXT("[PIE-REP] Fixed timestep restored"));
 	}
 
 	void FPIEInputReplayer::OnBeginPIE(bool /*bIsSimulating*/)
@@ -919,6 +946,7 @@ namespace UEMCPPIE
 		}
 
 		RepossessPlayer();
+		RestoreFixedTimestep();
 
 		if (ViewportCapture.IsValid())
 		{

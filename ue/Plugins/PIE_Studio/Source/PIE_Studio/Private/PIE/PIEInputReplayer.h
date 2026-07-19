@@ -66,6 +66,11 @@ namespace UEMCPPIE
 		TMap<FString, float> TrackedThresholds;
 		bool bEject = false;
 		float TimeScale = 1.0f;
+		// Opt-in stronger reproducibility (item X2): drive the engine at a fixed
+		// delta time (1/pin_fps) during replay instead of just capping FPS. Makes
+		// runs "more reproducible", never fully deterministic (Chaos/async still
+		// vary). Restored on finish.
+		bool bFixedTimestep = false;
 	};
 
 	struct FReplayerStatus
@@ -230,5 +235,12 @@ namespace UEMCPPIE
 		FDelegateHandle EndPIEHandle;
 		FDelegateHandle OnEndFrameHandle;
 		bool bEndFrameBound = false;
+
+		// Fixed-timestep save/restore (item X2).
+		bool bFixedTimestepApplied = false;
+		bool bSavedUseFixedTimestep = false;
+		double bSavedFixedDeltaTime = 0.0;
+		void ApplyFixedTimestep(int32 Hz);
+		void RestoreFixedTimestep();
 	};
 }

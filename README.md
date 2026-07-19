@@ -78,10 +78,13 @@ pie(action="record_read", id="some-recording", file="drift")
 
 ## MCP Actions
 
-37 actions in the `pie` category (provisioned by the plugin; call as `pie(action="...")`):
+45 actions in the `pie` category (provisioned by the plugin; call as `pie(action="...")`):
 
 - **Recording** — `record_arm`, `record_disarm`, `record_stop`, `record_status`, `record_list`, `record_read`, `record_delete`, `mark`
 - **Replay** — `replay_arm`, `replay_run` (unattended), `replay_disarm`, `replay_stop`, `replay_status` with drift tracking and viewport capture
+- **Analysis** — `replay_analyze` (first-divergence lead + errors + images), `replay_state` (deterministic scrub/snapshot)
+- **Profiling** — `perf_summary` (frametime p50/p99, GPU, hitches), `trace_start`, `trace_stop` (Unreal Insights `.utrace`)
+- **Reproduction tests** — `test_scaffold`, `test_run`, `test_list`
 - **Observation** — `observe_arm`, `observe_disarm`, `observe_stop`, `observe_status`, `observe_list`, `observe_read` with profile-based sampling
 - **Input injection** — `inject_input`, `inject_input_start`, `inject_input_update`, `inject_input_stop`, `inject_input_tape`
 - **Profiles** — `profile_create`, `profile_read`, `profile_update`, `profile_delete`, `profile_list`

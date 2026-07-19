@@ -24,7 +24,9 @@ class AActor;
  */
 namespace UEMCPPIE
 {
-	constexpr int32 kFormatVersion = 1;
+	// v2 (item 4a/1c/2b): added drift summary block, perf CSV columns, and series
+	// reads. All additive; readers accept any version <= kFormatVersion.
+	constexpr int32 kFormatVersion = 2;
 
 	enum class EActionValueType : uint8
 	{
