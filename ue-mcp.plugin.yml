@@ -263,6 +263,35 @@ nativeModule:
         scope:          { type: string, description: "game | engine | world | localplayer (default game)" }
         propertyNames:  { type: array,  description: "Specific property names (default: all)" }
 
+    # ── Session log / errors ──────────────────────────────────────
+    session_errors:
+      description: "Deduped errors + warnings captured from the Output Log during a PIE session. Call this first after a run to see what errored. Reads the live/most-recent session in memory, or a finished one from disk."
+      schema:
+        session:       { type: string, description: "Session id under Saved/MCPSessions (default: live/most-recent in memory)" }
+        session_dir:   { type: string, description: "Absolute session dir (overrides session)" }
+        min_verbosity: { type: string, description: "error | warning (default warning)" }
+    session_log:
+      description: "Paged raw Output Log lines captured during a PIE session, with filters."
+      schema:
+        session:       { type: string, description: "Session id under Saved/MCPSessions (default: live/most-recent in memory)" }
+        session_dir:   { type: string, description: "Absolute session dir (overrides session)" }
+        min_verbosity: { type: string, description: "error | warning | display | log | verbose (default log)" }
+        category:      { type: string, description: "Exact log category filter (e.g. LogTemp)" }
+        contains:      { type: string, description: "Substring the message must contain" }
+        limit:         { type: number, description: "Max rows (default 200)" }
+        offset:        { type: number, description: "Starting row" }
+
+    # ── Standalone viewport capture ───────────────────────────────
+    capture:
+      description: "Grab N viewport frames from the live PIE session now (decoupled from replay). Writes JPEGs plus a labeled contact sheet and returns their paths. Use to make observe/inject flows visual."
+      schema:
+        frames:        { type: number, description: "How many frames to grab (default 1)" }
+        every:         { type: number, description: "Grab one frame every N rendered frames (default 1)" }
+        output_dir:    { type: string, description: "Destination dir (default Saved/MCPCaptures/<timestamp>)" }
+        format:        { type: string, description: "jpg | png (default jpg)" }
+        quality:       { type: number, description: "JPEG quality 1-100 (default 80)" }
+        contact_sheet: { type: boolean, description: "Also compose a labeled grid montage (default true)" }
+
 inject: {}
 tasks: {}
 flows: {}

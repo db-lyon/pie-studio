@@ -51,9 +51,17 @@ Observation profiles are UDataAssets that control what gets sampled during repla
 | **Capture Montage** | Sample active anim montage name and position. |
 | **Drift Thresholds** | Minimum change to count as divergence. Filters physics/animation jitter. Position (cm), Rotation (deg), Velocity (cm/s), and a default for tracked values. |
 
-## GIF Capture
+## Frame Capture
 
-Every replay automatically captures viewport frames and encodes an animated GIF (no external dependencies — built-in LZW encoder). GIFs are saved to `<recording>/captures/replay_<timestamp>.gif`, scaled to max 720px wide.
+When `capture_frame_every` is set, replay grabs viewport frames as **JPEGs** (kept on disk under `<recording>/frames/`) and composes a single labeled **contact sheet** at `<recording>/captures/contact_<timestamp>.jpg` — a grid montage of keyframes with the frame index drawn on each cell. A vision model reads stills, so the frames and the contact sheet are the useful artifacts; the paths come back in `replay_status.last_result` (`frame_dir`, `frame_count`, `contact_sheet_path`).
+
+Animated GIF is now **opt-in** (`encode_gif=true`). A vision model cannot parse GIF animation, so it is off by default and exists only for human eyeballing.
+
+`capture` grabs frames from the live PIE viewport on demand, decoupled from replay, so observe and inject flows can be visual too.
+
+## Session Errors
+
+`session_errors` returns the deduped errors and warnings captured from the Output Log during a PIE session (including Blueprint script exceptions), so an agent can ask "what errored" first. `session_log` returns the paged raw log with verbosity/category/substring filters. Both default to the live or most-recent session; pass a `session` id to read a finished one from `Saved/MCPSessions/`.
 
 ## Unattended replay
 
@@ -70,7 +78,7 @@ pie(action="record_read", id="some-recording", file="drift")
 
 ## MCP Actions
 
-34 actions in the `pie` category (provisioned by the plugin; call as `pie(action="...")`):
+37 actions in the `pie` category (provisioned by the plugin; call as `pie(action="...")`):
 
 - **Recording** — `record_arm`, `record_disarm`, `record_stop`, `record_status`, `record_list`, `record_read`, `record_delete`, `mark`
 - **Replay** — `replay_arm`, `replay_run` (unattended), `replay_disarm`, `replay_stop`, `replay_status` with drift tracking and viewport capture
@@ -79,6 +87,8 @@ pie(action="record_read", id="some-recording", file="drift")
 - **Profiles** — `profile_create`, `profile_read`, `profile_update`, `profile_delete`, `profile_list`
 - **Diff / Snapshot** — `record_diff`, `snapshot`
 - **PIE inspection** — `anim_state`, `anim_properties`, `subsystem_state`
+- **Session log** — `session_errors`, `session_log`
+- **Capture** — `capture` (standalone viewport frames + contact sheet)
 
 ## Data Layout
 
@@ -89,9 +99,17 @@ pie(action="record_read", id="some-recording", file="drift")
     sequence.json        # input sequence
     recording.csv        # frame-by-frame state
     drift.json           # replay drift report
+    frames/              # per-frame viewport JPEGs (kept)
+      frame_00000.jpg
+      frame_00001.jpg
     captures/
-      replay_20260527_171430.gif
-      replay_20260527_183200.gif
+      contact_20260527_171430.jpg   # labeled grid montage
+      replay_20260527_183200.gif    # only when encode_gif=true
+
+<Project>/Saved/MCPSessions/
+  <timestamp>/
+    session_log.jsonl    # captured Output Log
+    session_errors.json  # deduped errors + warnings
 
 <Project>/Saved/MCPObservations/
   obs_<profile>_<timestamp>/

@@ -12,6 +12,13 @@ public:
 	static TSharedPtr<FJsonValue> GetPieAnimProperties(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> GetPieSubsystemState(const TSharedPtr<FJsonObject>& Params);
 
+	// Session log / errors
+	static TSharedPtr<FJsonValue> PieSessionErrors(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieSessionLog(const TSharedPtr<FJsonObject>& Params);
+
+	// Standalone viewport capture
+	static TSharedPtr<FJsonValue> PieCapture(const TSharedPtr<FJsonObject>& Params);
+
 	// Input injection
 	static TSharedPtr<FJsonValue> InjectInput(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> InjectInputStart(const TSharedPtr<FJsonObject>& Params);

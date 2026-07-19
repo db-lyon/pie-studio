@@ -49,6 +49,10 @@ namespace UEMCPPIE
 		// Document the ffmpeg incantation to assemble a GIF/MP4 from the
 		// resulting PNG sequence.
 		int32 CaptureFrameEvery = 0;
+		// Also encode an animated GIF from the captured frames on finish. Off by
+		// default: a vision model cannot parse GIF animation, so the frames + the
+		// contact sheet are the useful artifacts. GIF is for human eyeballing.
+		bool bEncodeGif = false;
 		// Multi-client PIE: which local player to drive injections / sample
 		// for drift. 0 = first (default), 1+ selects subsequent local players.
 		int32 ClientId = 0;
@@ -86,6 +90,9 @@ namespace UEMCPPIE
 		float LastMaxPositionDriftCm = 0.f;
 		float LastMaxVelocityDriftCms = 0.f;
 		int32 LastFramesCompared = 0;
+		FString LastFrameDir;
+		int32 LastFrameCount = 0;
+		FString LastContactSheetPath;
 	};
 
 	struct FLiveReplaySnapshot
@@ -113,6 +120,12 @@ namespace UEMCPPIE
 		int32 FramesCaptured = 0;
 		FString CaptureDir;
 		FString GifPath;
+		// Kept frames + the labeled contact sheet (item 1b). FrameDir holds the
+		// per-frame JPEGs (frame_NNNNN.jpg); ContactSheetPath is a single grid
+		// montage the agent reads at a glance.
+		FString FrameDir;
+		int32 FrameCount = 0;
+		FString ContactSheetPath;
 	};
 
 	class FPIEInputReplayer

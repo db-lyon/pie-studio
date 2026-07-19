@@ -1,6 +1,7 @@
 #include "PIEInputReplayer.h"
 #include "PIEViewportCapture.h"
 #include "PIEGifEncoder.h"
+#include "PIEContactSheet.h"
 #include "PIEInputInjector.h"
 #include "PIE_StudioModule.h"
 #include "Editor.h"
@@ -427,6 +428,7 @@ namespace UEMCPPIE
 		if (Pending.CaptureFrameEvery > 0 && !ViewportCapture.IsValid())
 		{
 			ViewportCapture = FSceneViewExtensions::NewExtension<FPIEViewportCapture>();
+			ViewportCapture->SetOutputFormat(/*bJpeg*/true, /*Quality*/80);
 			ViewportCapture->SetEnabled(true);
 		}
 
@@ -624,7 +626,7 @@ namespace UEMCPPIE
 				const uint64 FrameIdx = static_cast<uint64>(CaptureFrameCounter);
 				if ((FrameIdx % static_cast<uint64>(Pending.CaptureFrameEvery)) == 0)
 				{
-					const FString FullPath = CaptureDir / FString::Printf(TEXT("frame_%05llu.png"), FrameIdx);
+					const FString FullPath = CaptureDir / FString::Printf(TEXT("frame_%05llu.jpg"), FrameIdx);
 					ViewportCapture->RequestCapture(FullPath);
 				}
 				CaptureFrameCounter++;
@@ -820,29 +822,52 @@ namespace UEMCPPIE
 		if (!CaptureDir.IsEmpty() && FramesCaptured > 0)
 		{
 			TArray<FString> Frames;
-			IFileManager::Get().FindFiles(Frames, *(CaptureDir / TEXT("frame_*.png")), true, false);
+			IFileManager::Get().FindFiles(Frames, *(CaptureDir / TEXT("frame_*.jpg")), true, false);
 			Frames.Sort();
 			for (FString& F : Frames) { F = CaptureDir / F; }
 
 			if (Frames.Num() > 0)
 			{
+				R.FrameDir = CaptureDir;
+				R.FrameCount = Frames.Num();
+
 				const FString RecordingDir = FPaths::GetPath(CaptureDir);
 				const FString CapturesDir = RecordingDir / TEXT("captures");
 				IFileManager::Get().MakeDirectory(*CapturesDir, true);
-				const FString GifName = FString::Printf(TEXT("replay_%s.gif"),
-					*FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")));
-				const FString GifPath = CapturesDir / GifName;
-				FGifEncodeParams GP;
-				GP.DelayCs = 3;
-				GP.MaxWidth = 720;
-				if (EncodeAnimatedGif(Frames, GifPath, GP))
+				const FString Stamp = FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S"));
+
+				// Always compose a labeled contact sheet: one JPEG the agent can
+				// read at a glance. Labels carry the frame index so a divergence
+				// frame can be located visually. Frames are KEPT on disk (unlike
+				// the old pipeline, which deleted them after GIF encoding).
+				TArray<FString> Labels;
+				Labels.Reserve(Frames.Num());
+				for (int32 i = 0; i < Frames.Num(); ++i)
 				{
-					R.GifPath = GifPath;
-					for (const FString& F : Frames)
+					Labels.Add(FString::Printf(TEXT("F%d"), i));
+				}
+				const FString SheetPath = CapturesDir / FString::Printf(TEXT("contact_%s.jpg"), *Stamp);
+				FContactSheetParams CP;
+				CP.CellWidth = 300;
+				CP.MaxCells = 25;
+				if (ComposeContactSheet(Frames, SheetPath, CP, &Labels))
+				{
+					R.ContactSheetPath = SheetPath;
+				}
+
+				// GIF is now opt-in (capture_frame_every gives frames; encode_gif
+				// asks for the animation on top). A vision model cannot parse GIF
+				// animation, so it is off by default.
+				if (Pending.bEncodeGif)
+				{
+					const FString GifPath = CapturesDir / FString::Printf(TEXT("replay_%s.gif"), *Stamp);
+					FGifEncodeParams GP;
+					GP.DelayCs = 3;
+					GP.MaxWidth = 720;
+					if (EncodeAnimatedGif(Frames, GifPath, GP))
 					{
-						IFileManager::Get().Delete(*F);
+						R.GifPath = GifPath;
 					}
-					IFileManager::Get().DeleteDirectory(*CaptureDir, false, false);
 				}
 			}
 		}
@@ -891,6 +916,9 @@ namespace UEMCPPIE
 			S.LastMaxPositionDriftCm = LastFinish.Drift.MaxPositionDriftCm;
 			S.LastMaxVelocityDriftCms = LastFinish.Drift.MaxVelocityDriftCms;
 			S.LastFramesCompared = LastFinish.Drift.FramesCompared;
+			S.LastFrameDir = LastFinish.FrameDir;
+			S.LastFrameCount = LastFinish.FrameCount;
+			S.LastContactSheetPath = LastFinish.ContactSheetPath;
 		}
 		return S;
 	}

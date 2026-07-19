@@ -48,6 +48,10 @@ namespace
 			Last->SetNumberField(TEXT("max_position_drift_cm"), S.LastMaxPositionDriftCm);
 			Last->SetNumberField(TEXT("max_velocity_drift_cms"), S.LastMaxVelocityDriftCms);
 			Last->SetNumberField(TEXT("frames_compared"), S.LastFramesCompared);
+			// Item 1b: kept frames + labeled contact sheet the agent can view.
+			if (!S.LastFrameDir.IsEmpty()) Last->SetStringField(TEXT("frame_dir"), S.LastFrameDir);
+			if (S.LastFrameCount > 0) Last->SetNumberField(TEXT("frame_count"), S.LastFrameCount);
+			if (!S.LastContactSheetPath.IsEmpty()) Last->SetStringField(TEXT("contact_sheet_path"), S.LastContactSheetPath);
 			R->SetObjectField(TEXT("last_result"), Last);
 		}
 	}
@@ -106,6 +110,7 @@ namespace
 		Cfg.bApplyRngSeed = OptionalBool(Params, TEXT("apply_rng_seed"), true);
 		Cfg.bRecordDrift  = OptionalBool(Params, TEXT("record_drift"), true);
 		Cfg.bAutoStopPIE  = OptionalBool(Params, TEXT("auto_stop_pie"), false);
+		Cfg.bEncodeGif    = OptionalBool(Params, TEXT("encode_gif"), false);
 		Cfg.bEject        = OptionalBool(Params, TEXT("eject"), false);
 		Cfg.TimeScale     = static_cast<float>(OptionalNumber(Params, TEXT("time_scale"), 1.0));
 		const FString Mode = OptionalString(Params, TEXT("mode"), TEXT("replay")).ToLower();
@@ -242,6 +247,15 @@ TSharedPtr<FJsonValue> FGameplayHandlers::PieReplayStop(const TSharedPtr<FJsonOb
 	Result->SetBoolField(TEXT("stopped"), true);
 	Result->SetNumberField(TEXT("executed_steps"), F.ExecutedSteps);
 	Result->SetNumberField(TEXT("frames_captured"), F.FramesCaptured);
+	if (F.FrameCount > 0)
+	{
+		Result->SetStringField(TEXT("frame_dir"), F.FrameDir);
+		Result->SetNumberField(TEXT("frame_count"), F.FrameCount);
+		if (!F.ContactSheetPath.IsEmpty())
+		{
+			Result->SetStringField(TEXT("contact_sheet_path"), F.ContactSheetPath);
+		}
+	}
 	if (!F.CaptureDir.IsEmpty())
 	{
 		Result->SetStringField(TEXT("capture_dir"), F.CaptureDir);
