@@ -57,6 +57,7 @@ void FPIE_StudioModule::StartupModule()
 	UEMCP::RegisterExternalHandler(TEXT("replay_disarm"), &FGameplayHandlers::PieReplayDisarm);
 	UEMCP::RegisterExternalHandler(TEXT("replay_stop"), &FGameplayHandlers::PieReplayStop);
 	UEMCP::RegisterExternalHandler(TEXT("replay_status"), &FGameplayHandlers::PieReplayStatus);
+	UEMCP::RegisterExternalHandler(TEXT("replay_analyze"), &FGameplayHandlers::PieReplayAnalyze);
 
 	// Diff / Snapshot
 	UEMCP::RegisterExternalHandler(TEXT("record_diff"), &FGameplayHandlers::PieRecordDiff);
@@ -111,7 +112,7 @@ void FPIE_StudioModule::StartupModule()
 		})
 	);
 
-	UE_LOG(LogPIEStudio, Log, TEXT("[pie-studio] Registered %d handlers"), 37);
+	UE_LOG(LogPIEStudio, Log, TEXT("[pie-studio] Registered %d handlers"), 38);
 }
 
 void FPIE_StudioModule::ShutdownModule()
@@ -138,6 +139,7 @@ void FPIE_StudioModule::ShutdownModule()
 	UEMCP::UnregisterExternalHandler(TEXT("replay_disarm"));
 	UEMCP::UnregisterExternalHandler(TEXT("replay_stop"));
 	UEMCP::UnregisterExternalHandler(TEXT("replay_status"));
+	UEMCP::UnregisterExternalHandler(TEXT("replay_analyze"));
 	UEMCP::UnregisterExternalHandler(TEXT("record_diff"));
 	UEMCP::UnregisterExternalHandler(TEXT("snapshot"));
 	UEMCP::UnregisterExternalHandler(TEXT("profile_create"));

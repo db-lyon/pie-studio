@@ -201,6 +201,9 @@ namespace UEMCPPIE
 		float MaxVelDriftCms = 0.f;
 		float MaxRotDriftDeg = 0.f;
 		int32 MontageMismatches = 0;
+		// First frame/channel to cross threshold (item 1c). Captured live so the
+		// exact source/replay values at the crossing are available for the lead.
+		FDriftDivergence FirstDivergence;
 		int32 FramesCompared = 0;
 		int32 FramesMissingInReplay = 0;
 		TMap<FString, float> MaxTrackedDeltas;

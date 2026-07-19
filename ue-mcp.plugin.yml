@@ -124,6 +124,7 @@ nativeModule:
         time_scale:          { type: number,  description: "Playback speed multiplier (default 1)" }
         mode:                { type: string,  description: "replay | monitor (default replay)" }
         capture_frame_every: { type: number,  description: "Capture a viewport frame every N steps" }
+        encode_gif:          { type: boolean, description: "Also encode an animated GIF from captured frames (default false; frames + contact sheet are the useful artifacts)" }
         client_id:           { type: number }
         drift_thresholds:    { type: object,  description: "position_cm / rotation_deg / velocity_cms / tracked overrides" }
     replay_run:
@@ -143,9 +144,15 @@ nativeModule:
         eject:               { type: boolean, description: "Eject to spectator during replay" }
         time_scale:          { type: number,  description: "Playback speed multiplier (default 1)" }
         mode:                { type: string,  description: "replay | monitor (default replay)" }
-        capture_frame_every: { type: number,  description: "Capture a viewport frame every N steps (encodes a GIF on finish)" }
+        capture_frame_every: { type: number,  description: "Capture a viewport frame every N steps (keeps JPEG frames + builds a contact sheet)" }
+        encode_gif:          { type: boolean, description: "Also encode an animated GIF on finish (default false)" }
         client_id:           { type: number }
         drift_thresholds:    { type: object,  description: "position_cm / rotation_deg / velocity_cms / tracked overrides" }
+    replay_analyze:
+      description: "Read a finalised drift.json and return the synthesised lead: first divergence (frame, channel, source vs replay value), top channels, errors logged during the run, and the images bracketing the divergence. Read this instead of the drift CSV."
+      schema:
+        recording_id:  { type: string, description: "Source recording id" }
+        recording_dir: { type: string, description: "Recording folder (used directly when no id is given)" }
     replay_disarm:
       description: "Cancel an armed replay"
     replay_stop:

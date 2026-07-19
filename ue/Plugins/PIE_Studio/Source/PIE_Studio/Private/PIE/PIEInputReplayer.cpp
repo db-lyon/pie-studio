@@ -2,6 +2,7 @@
 #include "PIEViewportCapture.h"
 #include "PIEGifEncoder.h"
 #include "PIEContactSheet.h"
+#include "PIESessionLog.h"
 #include "PIEInputInjector.h"
 #include "PIE_StudioModule.h"
 #include "Editor.h"
@@ -286,6 +287,7 @@ namespace UEMCPPIE
 		MaxVelDriftCms = 0.f;
 		MaxRotDriftDeg = 0.f;
 		MontageMismatches = 0;
+		FirstDivergence = FDriftDivergence();
 		FramesCompared = 0;
 		FramesMissingInReplay = 0;
 		MaxTrackedDeltas.Reset();
@@ -677,6 +679,70 @@ namespace UEMCPPIE
 					    bTrackedOver)
 					{
 						DriftFrames.Add(E);
+
+						// First divergence (item 1c): pick the channel that crossed
+						// by the largest ratio on this, the earliest, over-threshold
+						// frame. Retain the exact source/replay scalars.
+						if (!FirstDivergence.bFound)
+						{
+							const double PosR = (Pending.ThrPosCm > 0.f) ? E.PositionDeltaCm / Pending.ThrPosCm : 0.0;
+							const double VelR = (Pending.ThrVelCms > 0.f) ? E.VelocityDeltaCms / Pending.ThrVelCms : 0.0;
+							const double RotR = (Pending.ThrRotDeg > 0.f) ? E.RotationDeltaDeg / Pending.ThrRotDeg : 0.0;
+
+							FDriftDivergence& Fd = FirstDivergence;
+							Fd.bFound = true;
+							Fd.Frame = ReplayFrame;
+							Fd.Time = (ActiveSequence.SampleHz > 0)
+								? static_cast<double>(ReplayFrame) / ActiveSequence.SampleHz
+								: 0.0;
+
+							if (VelR >= PosR && VelR >= RotR && VelR > 0.0)
+							{
+								Fd.Channel = TEXT("velocity");
+								Fd.Delta = E.VelocityDeltaCms;
+								Fd.Threshold = Pending.ThrVelCms;
+								Fd.SourceValue = Src.PawnVelocity.Size();
+								Fd.ReplayValue = Row.PawnVelocity.Size();
+							}
+							else if (RotR >= PosR && RotR > 0.0)
+							{
+								Fd.Channel = TEXT("rotation");
+								Fd.Delta = E.RotationDeltaDeg;
+								Fd.Threshold = Pending.ThrRotDeg;
+								Fd.SourceValue = Src.PawnRotation.Euler().Size();
+								Fd.ReplayValue = Row.PawnRotation.Euler().Size();
+							}
+							else if (PosR > 0.0)
+							{
+								Fd.Channel = TEXT("position");
+								Fd.Delta = E.PositionDeltaCm;
+								Fd.Threshold = Pending.ThrPosCm;
+								Fd.SourceValue = Src.PawnLocation.Size();
+								Fd.ReplayValue = Row.PawnLocation.Size();
+							}
+							else
+							{
+								// A tracked reflection value crossed first.
+								Fd.Channel = TEXT("tracked");
+								double BestRatio = 0.0;
+								for (const TPair<FString, double>& KV : Src.TrackedValues)
+								{
+									const double* Cur = Row.TrackedValues.Find(KV.Key);
+									const double Dl = FMath::Abs((Cur ? *Cur : 0.0) - KV.Value);
+									const float* PerPath = Pending.TrackedThresholds.Find(KV.Key);
+									const float Thr = PerPath ? *PerPath : Pending.ThrTrackedDefault;
+									if (Thr > 0.f && Dl > Thr && (Dl / Thr) > BestRatio)
+									{
+										BestRatio = Dl / Thr;
+										Fd.Channel = KV.Key;
+										Fd.Delta = Dl;
+										Fd.Threshold = Thr;
+										Fd.SourceValue = KV.Value;
+										Fd.ReplayValue = Cur ? *Cur : 0.0;
+									}
+								}
+							}
+						}
 					}
 
 					// Per-tracked-actor drift: walk the same frame index in
@@ -797,6 +863,49 @@ namespace UEMCPPIE
 			D.TrackedValueMaxDeltas = MaxTrackedDeltas;
 			D.ActorDrift = ActorDriftAccum;
 			D.FramesOverThreshold = DriftFrames;
+
+			// Item 1c: synthesise the lead the agent reads instead of the CSV.
+			D.Summary.bValid = true;
+			D.Summary.First = FirstDivergence;
+			{
+				TArray<TPair<FString, float>> Top;
+				Top.Add(TPair<FString, float>(TEXT("position_cm"), MaxPosDriftCm));
+				Top.Add(TPair<FString, float>(TEXT("velocity_cms"), MaxVelDriftCms));
+				Top.Add(TPair<FString, float>(TEXT("rotation_deg"), MaxRotDriftDeg));
+				for (const TPair<FString, float>& KV : MaxTrackedDeltas)
+				{
+					Top.Add(KV);
+				}
+				Top.Sort([](const TPair<FString, float>& A, const TPair<FString, float>& B) { return A.Value > B.Value; });
+				if (Top.Num() > 5) Top.SetNum(5);
+				D.Summary.TopChannels = MoveTemp(Top);
+			}
+			{
+				FPIESessionLog& SLog = FPIESessionLog::Get();
+				D.Summary.SessionDir = SLog.GetLastDir();
+				const TSharedPtr<FJsonObject> ES = SLog.BuildErrorSummary(ELogVerbosity::Warning);
+				if (ES.IsValid())
+				{
+					int32 EC = 0, WC = 0;
+					ES->TryGetNumberField(TEXT("error_count"), EC);
+					ES->TryGetNumberField(TEXT("warning_count"), WC);
+					D.Summary.ErrorsDuringRun = EC;
+					D.Summary.WarningsDuringRun = WC;
+					const TArray<TSharedPtr<FJsonValue>>* Issues = nullptr;
+					if (ES->TryGetArrayField(TEXT("issues"), Issues) && Issues && Issues->Num() > 0)
+					{
+						const TSharedPtr<FJsonObject>& I0 = (*Issues)[0]->AsObject();
+						if (I0.IsValid())
+						{
+							I0->TryGetStringField(TEXT("message"), D.Summary.TopError);
+							double FF = 0;
+							I0->TryGetNumberField(TEXT("first_frame"), FF);
+							D.Summary.TopErrorFrame = static_cast<uint64>(FF);
+						}
+					}
+				}
+			}
+
 			FString Err;
 			if (SaveDrift(CurrentDriftPath, D, Err))
 			{

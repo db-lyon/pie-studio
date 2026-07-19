@@ -157,6 +157,34 @@ namespace UEMCPPIE
 		int32 FramesUnresolvedInReplay = 0;
 	};
 
+	// The single frame/channel where the replay first diverged past threshold.
+	// The most actionable field in the whole report (item 1c).
+	struct FDriftDivergence
+	{
+		bool bFound = false;
+		uint64 Frame = 0;
+		double Time = 0.0;        // seconds since replay attach
+		FString Channel;          // "position" | "velocity" | "rotation" | tracked path
+		double Delta = 0.0;
+		double Threshold = 0.0;
+		double SourceValue = 0.0; // scalar where meaningful (velocity/rotation/tracked)
+		double ReplayValue = 0.0;
+	};
+
+	// A synthesised lead the agent reads instead of the raw CSV (item 1c).
+	struct FDriftSummary
+	{
+		bool bValid = false;
+		FDriftDivergence First;
+		// Channel -> max |delta| across the run, ranked descending.
+		TArray<TPair<FString, float>> TopChannels;
+		int32 ErrorsDuringRun = 0;
+		int32 WarningsDuringRun = 0;
+		FString TopError;         // most-relevant error message logged during the run
+		uint64 TopErrorFrame = 0;
+		FString SessionDir;       // where session_errors.json / session_log.jsonl live
+	};
+
 	struct FDriftReport
 	{
 		int32 Version = kFormatVersion;
@@ -172,6 +200,7 @@ namespace UEMCPPIE
 		TMap<FString, float> TrackedValueMaxDeltas;
 		TMap<FString, FActorDrift> ActorDrift;
 		TArray<FDriftFrameEntry> FramesOverThreshold;
+		FDriftSummary Summary;
 	};
 
 	// CSV row used by both the recorder (writing) and the replayer / diff
