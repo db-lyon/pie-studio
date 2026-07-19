@@ -269,6 +269,8 @@ namespace UEMCPPIE
 	FString BuildCSVHeader(const FCSVHeader& H);
 	void AppendCSVRow(FString& Body, const FCSVRow& Row, const FCSVHeader& H);
 	bool SaveCSV(const FString& Path, const FString& HeaderAndBody, FString& OutError);
+	// Quote-aware split of a single CSV line (handles "a,b" and "" escaping).
+	TArray<FString> SplitCSVLine(const FString& Line);
 
 	// ── Recording-directory helpers ──────────────────────────────────────
 

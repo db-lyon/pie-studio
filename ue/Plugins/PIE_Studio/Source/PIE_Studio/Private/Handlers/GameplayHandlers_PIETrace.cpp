@@ -9,34 +9,11 @@
 #include "Misc/DateTime.h"
 #include "Misc/FileHelper.h"
 #include "HAL/FileManager.h"
+#include "PIE/PIESequenceFormat.h"
 
 namespace
 {
-	// Quote-aware CSV line split (handles "a,b" and "" escaping).
-	TArray<FString> SplitCsvLine(const FString& Line)
-	{
-		TArray<FString> Out;
-		FString Cur;
-		bool bInQuotes = false;
-		for (int32 i = 0; i < Line.Len(); ++i)
-		{
-			const TCHAR C = Line[i];
-			if (bInQuotes)
-			{
-				if (C == TEXT('"'))
-				{
-					if (i + 1 < Line.Len() && Line[i + 1] == TEXT('"')) { Cur.AppendChar('"'); ++i; }
-					else { bInQuotes = false; }
-				}
-				else { Cur.AppendChar(C); }
-			}
-			else if (C == TEXT('"')) { bInQuotes = true; }
-			else if (C == TEXT(',')) { Out.Add(Cur); Cur.Reset(); }
-			else { Cur.AppendChar(C); }
-		}
-		Out.Add(Cur);
-		return Out;
-	}
+	using UEMCPPIE::SplitCSVLine;
 
 	double Percentile(const TArray<double>& SortedAsc, double P)
 	{
@@ -154,7 +131,7 @@ TSharedPtr<FJsonValue> FGameplayHandlers::PiePerfSummary(const TSharedPtr<FJsonO
 		return MCPError(TEXT("recording.csv has no header"));
 	}
 
-	const TArray<FString> Cols = SplitCsvLine(Lines[HeaderIdx]);
+	const TArray<FString> Cols = SplitCSVLine(Lines[HeaderIdx]);
 	auto ColIndex = [&Cols](const TCHAR* Name) -> int32
 	{
 		for (int32 i = 0; i < Cols.Num(); ++i) { if (Cols[i] == Name) return i; }
@@ -181,7 +158,7 @@ TSharedPtr<FJsonValue> FGameplayHandlers::PiePerfSummary(const TSharedPtr<FJsonO
 	for (int32 i = HeaderIdx + 1; i < Lines.Num(); ++i)
 	{
 		if (Lines[i].IsEmpty() || Lines[i].StartsWith(TEXT("#"))) continue;
-		const TArray<FString> F = SplitCsvLine(Lines[i]);
+		const TArray<FString> F = SplitCSVLine(Lines[i]);
 		if (CDt >= F.Num()) continue;
 
 		FFrameRow R;

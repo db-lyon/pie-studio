@@ -245,13 +245,17 @@ nativeModule:
         output_dir: { type: string }
         limit:      { type: number, description: "Max rows (default 200)" }
     observe_read:
-      description: "Read an observation run artifact"
+      description: "Read an observation run artifact. file=series returns per-channel time series (min/max/first/last, first_frame_over a threshold) instead of raw rows."
       schema:
-        run_id:     { type: string, description: "Observation run id (required)" }
-        output_dir: { type: string }
-        file:       { type: string, description: "manifest | csv | tracked (default manifest)" }
-        limit:      { type: number, description: "csv/tracked: max rows (default 1000)" }
-        offset:     { type: number }
+        run_id:         { type: string,  description: "Observation run id (required)" }
+        output_dir:     { type: string }
+        file:           { type: string,  description: "manifest | csv | tracked | series (default manifest)" }
+        limit:          { type: number,  description: "csv/tracked: max rows (default 1000)" }
+        offset:         { type: number }
+        channels:       { type: string,  description: "series: comma-separated column names (default: all t:* + speed2d + gpu_ms/game_ms)" }
+        threshold:      { type: number,  description: "series: report the first frame where |value| exceeds this" }
+        include_values: { type: boolean, description: "series: include the (downsampled) value array (default false)" }
+        max_points:     { type: number,  description: "series: cap on values returned per channel (default 500)" }
 
     # ── Live PIE introspection ────────────────────────────────────
     anim_state:

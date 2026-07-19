@@ -71,6 +71,31 @@ namespace UEMCPPIE
 		}
 	}
 
+	TArray<FString> SplitCSVLine(const FString& Line)
+	{
+		TArray<FString> Out;
+		FString Cur;
+		bool bInQuotes = false;
+		for (int32 i = 0; i < Line.Len(); ++i)
+		{
+			const TCHAR C = Line[i];
+			if (bInQuotes)
+			{
+				if (C == TEXT('"'))
+				{
+					if (i + 1 < Line.Len() && Line[i + 1] == TEXT('"')) { Cur.AppendChar('"'); ++i; }
+					else { bInQuotes = false; }
+				}
+				else { Cur.AppendChar(C); }
+			}
+			else if (C == TEXT('"')) { bInQuotes = true; }
+			else if (C == TEXT(',')) { Out.Add(Cur); Cur.Reset(); }
+			else { Cur.AppendChar(C); }
+		}
+		Out.Add(Cur);
+		return Out;
+	}
+
 	FString ActionValueTypeToString(EActionValueType Type)
 	{
 		switch (Type)

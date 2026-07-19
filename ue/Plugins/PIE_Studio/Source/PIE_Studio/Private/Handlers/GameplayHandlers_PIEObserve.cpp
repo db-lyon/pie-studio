@@ -490,5 +490,127 @@ TSharedPtr<FJsonValue> FGameplayHandlers::PieObserveRead(const TSharedPtr<FJsonO
 		return MCPResult(Result);
 	}
 
-	return MCPError(FString::Printf(TEXT("Unknown file type: %s (use manifest, csv, or tracked)"), *File));
+	if (File == TEXT("series"))
+	{
+		// Item 2b: turn observation.csv into per-channel time series with
+		// min/max/first/last and the first frame that crosses a threshold, so an
+		// agent can ask "how did channel X change" and get a curve, not one value.
+		FString CSV;
+		if (!FFileHelper::LoadFileToString(CSV, *(RunDir / TEXT("observation.csv"))))
+			return MCPError(TEXT("observation.csv not found"));
+
+		TArray<FString> Lines;
+		CSV.ParseIntoArrayLines(Lines);
+		int32 HeaderIdx = INDEX_NONE;
+		for (int32 i = 0; i < Lines.Num(); ++i)
+		{
+			if (!Lines[i].StartsWith(TEXT("#"))) { HeaderIdx = i; break; }
+		}
+		if (HeaderIdx == INDEX_NONE) return MCPError(TEXT("observation.csv has no header"));
+
+		const TArray<FString> Cols = UEMCPPIE::SplitCSVLine(Lines[HeaderIdx]);
+		auto ColIndex = [&Cols](const FString& Name) -> int32
+		{
+			for (int32 i = 0; i < Cols.Num(); ++i) { if (Cols[i] == Name) return i; }
+			return INDEX_NONE;
+		};
+		const int32 CFrame = ColIndex(TEXT("frame"));
+		const int32 CTime = ColIndex(TEXT("time"));
+
+		// Requested channels, or every tracked-value / speed column by default.
+		TArray<FString> Channels;
+		const FString ChParam = OptionalString(Params, TEXT("channels"));
+		if (!ChParam.IsEmpty())
+		{
+			ChParam.ParseIntoArray(Channels, TEXT(","));
+			for (FString& C : Channels) { C.TrimStartAndEndInline(); }
+		}
+		else
+		{
+			for (const FString& C : Cols)
+			{
+				if (C.StartsWith(TEXT("t:")) || C == TEXT("speed2d") ||
+					C == TEXT("gpu_ms") || C == TEXT("game_ms"))
+				{
+					Channels.Add(C);
+				}
+			}
+		}
+
+		const bool bHasThreshold = Params->HasField(TEXT("threshold"));
+		const double Threshold = OptionalNumber(Params, TEXT("threshold"), 0.0);
+		const bool bIncludeValues = OptionalBool(Params, TEXT("include_values"), false);
+		const int32 MaxPoints = OptionalInt(Params, TEXT("max_points"), 500);
+
+		struct FChan { int32 Col; TArray<double> Vals; TArray<uint64> Frames; };
+		TMap<FString, FChan> Series;
+		for (const FString& Ch : Channels)
+		{
+			const int32 Ci = ColIndex(Ch);
+			if (Ci != INDEX_NONE) { FChan& S = Series.Add(Ch); S.Col = Ci; }
+		}
+
+		for (int32 i = HeaderIdx + 1; i < Lines.Num(); ++i)
+		{
+			if (Lines[i].IsEmpty() || Lines[i].StartsWith(TEXT("#"))) continue;
+			const TArray<FString> F = UEMCPPIE::SplitCSVLine(Lines[i]);
+			const uint64 Fr = (CFrame != INDEX_NONE && CFrame < F.Num())
+				? static_cast<uint64>(FCString::Atoi64(*F[CFrame])) : 0;
+			for (TPair<FString, FChan>& KV : Series)
+			{
+				if (KV.Value.Col < F.Num())
+				{
+					KV.Value.Vals.Add(FCString::Atod(*F[KV.Value.Col]));
+					KV.Value.Frames.Add(Fr);
+				}
+			}
+		}
+
+		TArray<TSharedPtr<FJsonValue>> Out;
+		for (const TPair<FString, FChan>& KV : Series)
+		{
+			const FChan& S = KV.Value;
+			if (S.Vals.Num() == 0) continue;
+			double MinV = S.Vals[0], MaxV = S.Vals[0];
+			int64 FirstOverFrame = -1;
+			for (int32 i = 0; i < S.Vals.Num(); ++i)
+			{
+				MinV = FMath::Min(MinV, S.Vals[i]);
+				MaxV = FMath::Max(MaxV, S.Vals[i]);
+				if (bHasThreshold && FirstOverFrame < 0 && FMath::Abs(S.Vals[i]) > Threshold)
+				{
+					FirstOverFrame = static_cast<int64>(S.Frames[i]);
+				}
+			}
+			TSharedRef<FJsonObject> CO = MakeShared<FJsonObject>();
+			CO->SetStringField(TEXT("channel"), KV.Key);
+			CO->SetNumberField(TEXT("count"), S.Vals.Num());
+			CO->SetNumberField(TEXT("min"), MinV);
+			CO->SetNumberField(TEXT("max"), MaxV);
+			CO->SetNumberField(TEXT("first"), S.Vals[0]);
+			CO->SetNumberField(TEXT("last"), S.Vals.Last());
+			if (bHasThreshold)
+			{
+				CO->SetNumberField(TEXT("threshold"), Threshold);
+				if (FirstOverFrame >= 0) CO->SetNumberField(TEXT("first_frame_over"), static_cast<double>(FirstOverFrame));
+			}
+			if (bIncludeValues)
+			{
+				// Even downsample to MaxPoints so the payload stays bounded.
+				TArray<TSharedPtr<FJsonValue>> Vs;
+				const int32 N = S.Vals.Num();
+				const int32 Step = FMath::Max(1, N / FMath::Max(1, MaxPoints));
+				for (int32 i = 0; i < N; i += Step) { Vs.Add(MakeShared<FJsonValueNumber>(S.Vals[i])); }
+				CO->SetArrayField(TEXT("values"), Vs);
+			}
+			Out.Add(MakeShared<FJsonValueObject>(CO));
+		}
+
+		auto Result = MCPSuccess();
+		Result->SetArrayField(TEXT("channels"), Out);
+		Result->SetNumberField(TEXT("channel_count"), Out.Num());
+		return MCPResult(Result);
+	}
+
+	return MCPError(FString::Printf(TEXT("Unknown file type: %s (use manifest, csv, tracked, or series)"), *File));
 }
