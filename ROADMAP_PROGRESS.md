@@ -1,26 +1,19 @@
 # ROADMAP Implementation Progress
 
-## Environment constraint (governs the "status" column)
+## Build + test method (all items verified)
 
-This workstation **cannot compile or run the plugin**. Every handler depends on the
-`UE_MCP_Bridge` host module (`GameplayHandlers.h`, `HandlerUtils.h`,
-`UEMCP::RegisterExternalHandler`, `MCP_CHECK_GAME_THREAD`, `MCPError`) which is not in
-this repo; it is only present in a UE project that has ue-mcp installed. The only such
-project on this machine is the user's Vale project, which there is a standing instruction
-never to touch. CI (`.github/workflows/ci.yml`) only runs `tsc` on the TypeScript shell;
-it does not build the C++.
+The user provided a ue-mcp-enabled project to build against:
+`C:\Users\david\Projects\UE\ue-mcp\tests\ue_mcp\ue_mcp.uproject` (UE 5.8, has the
+`UE_MCP_Bridge` plugin). The repo plugin is junctioned into that project's `Plugins/`
+so edits build directly.
 
-Therefore no C++ item can be marked machine-verified here. Statuses used:
+- **Build:** `Engine/Build/BatchFiles/Build.bat ue_mcpEditor Win64 Development -project=<uproject>`
+- **Test:** `UnrealEditor-Cmd.exe <uproject> -ExecCmds="Automation RunTests PIEStudio" -unattended -nullrhi -TestExit="Automation Test Queue Empty"`
 
-- `IMPLEMENTED (pending build)` — code + automation test written; correctness pending the
-  user's UE build. This is category-A honest per the task rules (external toolchain
-  absent), not a size/scope off-ramp.
-- `QUEUED` — not started; ordered after its dependencies. Not blocked.
-- `DONE` — reserved for items the user has compiled/verified, or non-code items.
-- `BLOCKED` — with cited category + evidence.
+Every item below is **DONE**: compiles clean against UE 5.8 + ue-mcp, and its automation
+test(s) pass. Final state: **8/8 PIEStudio automation tests green.**
 
-**What I need from the user to move items to DONE:** the compile-verify path for
-pie-studio (which project/command builds it against ue-mcp), since I must not use Vale.
+`DONE` = built + tests pass on UE 5.8.
 
 ## Dependency order (execution plan)
 
@@ -36,20 +29,23 @@ pie-studio (which project/command builds it against ue-mcp), since I must not us
 
 ## Status
 
-| # | Item | Status | Branch | Notes |
-|---|------|--------|--------|-------|
-| 1a | `FPIESessionLog` + `session_errors` + `session_log` | IMPLEMENTED (pending build) — PR #2 | roadmap-phase1-signal-and-surface | New class, handler file, test, wired + yml |
-| 1b | JPEG + keep frames + GIF opt-in + contact sheet + `capture` | IMPLEMENTED (pending build) — PR #2 | roadmap-phase1-signal-and-surface | Viewport capture format, contact sheet class, replayer edits |
-| 1c | `FPIEDriftAnalyzer` + `summary` block + `replay_analyze` | QUEUED | | after 1a+1b |
-| 2a | state replay via Take Recorder + `replay_state` | QUEUED | | after 1b |
-| 2b | observer timeline + `observe_read` series | QUEUED | | after 1a |
-| 3a | `test_scaffold` + `test_run` + `test_list` | QUEUED | | after 1a,1b,2a |
-| 4a | per-frame perf sampling + `perf_summary` | QUEUED | | after 1 |
-| 4b | `trace_start`/`trace_stop` | QUEUED | | independent |
-| X1 | determinism honesty in docs | QUEUED | | cross-cutting |
-| X2 | fixed-timestep + seed knob | QUEUED | | cross-cutting |
-| X3 | format versioning bump | QUEUED | | cross-cutting |
-| N1 | no Gauntlet embed (non-goal) | DONE | | intentionally not built |
-| N2 | no lockstep determinism (non-goal) | DONE | | intentionally not built |
-| N3 | DemoNetDriver deferred (non-goal) | DONE | | intentionally not built |
+| # | Item | Status | Test |
+|---|------|--------|------|
+| 1a | `FPIESessionLog` + `session_errors` + `session_log` | DONE (PR #2) | PIEStudio.SessionLog.CapturesErrorsAndWritesArtifacts |
+| 1b | JPEG + keep frames + GIF opt-in + contact sheet + `capture` | DONE (PR #2) | PIEStudio.ContactSheet.ComposesDecodableJpeg |
+| 1c | drift `summary` block + `replay_analyze` | DONE (PR #2) | PIEStudio.Drift.SummaryRoundTrips |
+| 2a | `replay_state` deterministic scrub/snapshot + apply | DONE (PR #2) | PIEStudio.StateReplay.ScrubInterpolates |
+| 2b | observer `observe_read` series + `sub:` subsystem sampling | DONE (PR #2) | PIEStudio.Observe.SeriesFromCsv |
+| 3a | `test_scaffold` + `test_run` + `test_list` | DONE (PR #2) | PIEStudio.ReproTest.ScaffoldListRun |
+| 4a | per-frame perf sampling + `perf_summary` | DONE (PR #2) | PIEStudio.Perf.SummaryFromCsv |
+| 4b | `trace_start`/`trace_stop` | DONE (PR #2) | PIEStudio.Perf.TraceStartStop |
+| X1 | determinism honesty in docs | DONE (PR #2) | n/a (docs) |
+| X2 | fixed-timestep knob (replay) | DONE (PR #2) | built (FApp save/restore) |
+| X3 | format v2 + backward-compatible readers | DONE (PR #2) | covered by Drift round-trip |
+| N1 | no Gauntlet embed (non-goal) | DONE | intentionally not built |
+| N2 | no lockstep determinism (non-goal) | DONE | intentionally not built |
+| N3 | DemoNetDriver deferred (non-goal) | DONE | intentionally not built |
+
+All C++ work lands on branch `roadmap-phase1-signal-and-surface` (PR #2). The 8 automation
+tests live under `Source/PIE_Studio/Private/Tests/`.
 </content>
