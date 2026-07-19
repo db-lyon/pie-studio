@@ -38,8 +38,8 @@ pie-studio (which project/command builds it against ue-mcp), since I must not us
 
 | # | Item | Status | Branch | Notes |
 |---|------|--------|--------|-------|
-| 1a | `FPIESessionLog` + `session_errors` + `session_log` | IMPLEMENTED (pending build) | roadmap-phase1-signal-and-surface | New class, handler file, test, wired + yml |
-| 1b | JPEG + keep frames + GIF opt-in + contact sheet + `capture` | IMPLEMENTED (pending build) | roadmap-phase1-signal-and-surface | Viewport capture format, contact sheet class, replayer edits |
+| 1a | `FPIESessionLog` + `session_errors` + `session_log` | IMPLEMENTED (pending build) — PR #2 | roadmap-phase1-signal-and-surface | New class, handler file, test, wired + yml |
+| 1b | JPEG + keep frames + GIF opt-in + contact sheet + `capture` | IMPLEMENTED (pending build) — PR #2 | roadmap-phase1-signal-and-surface | Viewport capture format, contact sheet class, replayer edits |
 | 1c | `FPIEDriftAnalyzer` + `summary` block + `replay_analyze` | QUEUED | | after 1a+1b |
 | 2a | state replay via Take Recorder + `replay_state` | QUEUED | | after 1b |
 | 2b | observer timeline + `observe_read` series | QUEUED | | after 1a |
