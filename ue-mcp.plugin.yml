@@ -288,6 +288,21 @@ nativeModule:
         limit:         { type: number, description: "Max rows (default 200)" }
         offset:        { type: number, description: "Starting row" }
 
+    # ── Profiling ─────────────────────────────────────────────────
+    perf_summary:
+      description: "Aggregate a recording's per-frame perf into a lead: frametime avg/p50/p99/max, avg game/render/gpu ms, peak memory, and the worst hitches with timestamps."
+      schema:
+        recording_id:  { type: string, description: "Recording id" }
+        recording_dir: { type: string, description: "Recording folder (used directly when no id is given)" }
+    trace_start:
+      description: "Start an Unreal Insights trace to a .utrace file. Returns the path to open in Unreal Insights. Call trace_stop to finish."
+      schema:
+        channels:   { type: string, description: "Comma-separated trace channels (default cpu,frame,bookmark,stats,counters,gpu)" }
+        output_dir: { type: string, description: "Destination dir (default Saved/MCPTraces)" }
+        name:       { type: string, description: "Trace filename (default pie_<timestamp>.utrace)" }
+    trace_stop:
+      description: "Stop the active Unreal Insights trace and report the .utrace path."
+
     # ── Standalone viewport capture ───────────────────────────────
     capture:
       description: "Grab N viewport frames from the live PIE session now (decoupled from replay). Writes JPEGs plus a labeled contact sheet and returns their paths. Use to make observe/inject flows visual."

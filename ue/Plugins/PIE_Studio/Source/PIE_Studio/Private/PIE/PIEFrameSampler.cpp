@@ -18,6 +18,10 @@
 #include "Animation/AnimMontage.h"
 #include "InputAction.h"
 #include "UObject/UnrealType.h"
+#include "RenderCore.h"       // GGameThreadTime / GRenderThreadTime
+#include "RHI.h"              // RHIGetGPUFrameTime
+#include "HAL/PlatformTime.h"
+#include "HAL/PlatformMemory.h"
 
 namespace UEMCPPIE
 {
@@ -246,6 +250,13 @@ namespace UEMCPPIE
 		Row.Frame = FrameNumber;
 		Row.Time = GameTime;
 		Row.Dt = DeltaTime;
+
+		// Per-frame performance (item 4a). Cheap global reads; populated every
+		// frame so the recorder can persist them and perf_summary can aggregate.
+		Row.GameMs = static_cast<float>(FPlatformTime::ToMilliseconds(GGameThreadTime));
+		Row.RenderMs = static_cast<float>(FPlatformTime::ToMilliseconds(GRenderThreadTime));
+		Row.GpuMs = static_cast<float>(FPlatformTime::ToMilliseconds(RHIGetGPUFrameCycles()));
+		Row.MemMB = static_cast<float>(FPlatformMemory::GetStats().UsedPhysical / (1024.0 * 1024.0));
 
 		if (!PIEWorld) return Row;
 		APlayerController* PC = (Config.ClientIndex > 0)

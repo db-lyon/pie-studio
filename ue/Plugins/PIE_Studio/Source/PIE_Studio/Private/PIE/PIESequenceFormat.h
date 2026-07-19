@@ -219,6 +219,12 @@ namespace UEMCPPIE
 		TMap<FString, FVector> ActionValues;
 		TMap<FString, double> TrackedValues;
 		TArray<FString> EdgeEvents;
+		// Per-frame performance (item 4a). Written to recording.csv as
+		// game_ms/render_ms/gpu_ms/mem_mb; consumed by perf_summary.
+		float GameMs = 0.f;
+		float RenderMs = 0.f;
+		float GpuMs = 0.f;
+		float MemMB = 0.f;
 	};
 
 	// ── JSON serialization ───────────────────────────────────────────────

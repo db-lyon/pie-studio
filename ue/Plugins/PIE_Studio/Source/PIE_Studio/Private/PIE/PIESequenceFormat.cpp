@@ -787,6 +787,9 @@ namespace UEMCPPIE
 		{
 			Out += FString::Printf(TEXT(",t:%s"), *T.Path);
 		}
+		// Perf columns (item 4a) sit before the free-form event column so a naive
+		// comma split still lands them correctly even if an event field is quoted.
+		Out += TEXT(",game_ms,render_ms,gpu_ms,mem_mb");
 		Out += TEXT(",event\n");
 		return Out;
 	}
@@ -828,6 +831,9 @@ namespace UEMCPPIE
 			const double* DV = Row.TrackedValues.Find(T.Path);
 			Body += FString::Printf(TEXT(",%.6f"), DV ? *DV : 0.0);
 		}
+
+		Body += FString::Printf(TEXT(",%.3f,%.3f,%.3f,%.1f"),
+			Row.GameMs, Row.RenderMs, Row.GpuMs, Row.MemMB);
 
 		FString Events = FString::Join(Row.EdgeEvents, TEXT("|"));
 		Body += FString::Printf(TEXT(",%s\n"), *CSVEscape(Events));

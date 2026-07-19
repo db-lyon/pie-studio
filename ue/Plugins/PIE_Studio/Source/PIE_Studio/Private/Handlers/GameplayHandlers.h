@@ -19,6 +19,11 @@ public:
 	// Standalone viewport capture
 	static TSharedPtr<FJsonValue> PieCapture(const TSharedPtr<FJsonObject>& Params);
 
+	// Profiling
+	static TSharedPtr<FJsonValue> PieTraceStart(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieTraceStop(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PiePerfSummary(const TSharedPtr<FJsonObject>& Params);
+
 	// Input injection
 	static TSharedPtr<FJsonValue> InjectInput(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> InjectInputStart(const TSharedPtr<FJsonObject>& Params);
