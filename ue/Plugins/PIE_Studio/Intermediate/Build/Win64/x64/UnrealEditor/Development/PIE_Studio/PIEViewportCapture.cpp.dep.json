@@ -1,0 +1,42 @@
+{
+    "Version": "1.2",
+    "Data": {
+        "Source": "c:\\users\\david\\projects\\ue\\ue-mcp\\tests\\ue_mcp\\plugins\\pie_studio\\source\\pie_studio\\private\\pie\\pieviewportcapture.cpp",
+        "ProvidedModule": "",
+        "PCH": "c:\\users\\david\\projects\\ue\\ue-mcp\\tests\\ue_mcp\\intermediate\\build\\win64\\x64\\ue_mcpeditor\\development\\unrealed\\sharedpch.unrealed.project.valapi.valexpapi.cpp20.h.pch",
+        "Includes": [
+            "c:\\users\\david\\projects\\ue\\ue-mcp\\tests\\ue_mcp\\plugins\\pie_studio\\intermediate\\build\\win64\\x64\\unrealeditor\\development\\pie_studio\\definitions.pie_studio.h",
+            "c:\\users\\david\\projects\\ue\\ue-mcp\\tests\\ue_mcp\\plugins\\pie_studio\\source\\pie_studio\\private\\pie\\pieviewportcapture.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\engine\\public\\sceneviewextension.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\engine\\public\\sceneviewextensioncontext.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\intermediate\\build\\win64\\unrealeditor\\inc\\engine\\uht\\sceneviewextensioncontext.generated.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\engine\\public\\scenetexturesconfig.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\rendercore\\public\\gbufferinfo.h",
+            "c:\\users\\david\\projects\\ue\\ue-mcp\\tests\\ue_mcp\\plugins\\pie_studio\\source\\pie_studio\\public\\pie_studiomodule.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\rendercore\\public\\rendergraphbuilder.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\rendercore\\public\\rendergraphblackboard.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\core\\public\\misc\\generatedtypename.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\rendercore\\public\\rendergraphevent.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\rendercore\\public\\rendergraphevent.inl",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\rendercore\\public\\rendergraphpass.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\rendercore\\public\\rendergraphparameter.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\rendercore\\public\\rendergraphresources.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\rhi\\public\\rhitransientresourceallocator.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\rendercore\\public\\rendergraphresources.inl",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\rendercore\\public\\rendergraphparameters.inl",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\rendercore\\public\\rendergraphtrace.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\rhi\\public\\rendertracing.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\rendercore\\public\\rendergraphvalidation.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\core\\public\\experimental\\containers\\robinhoodhashtable.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\rendercore\\public\\rendergraphbuilder.inl",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\rendercore\\public\\rendergraphutils.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\rendercore\\public\\shaderparameterstruct.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\engine\\public\\imageutils.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\imagewrapper\\public\\iimagewrapper.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\imagewrapper\\public\\imagewrapperoutputtypes.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\imagewrapper\\public\\iimagewrappermodule.h"
+        ],
+        "ImportedModules": [],
+        "ImportedHeaderUnits": []
+    }
+}

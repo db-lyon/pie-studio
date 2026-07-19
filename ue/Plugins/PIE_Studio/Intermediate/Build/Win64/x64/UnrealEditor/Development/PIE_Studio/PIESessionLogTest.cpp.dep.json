@@ -1,0 +1,15 @@
+{
+    "Version": "1.2",
+    "Data": {
+        "Source": "c:\\users\\david\\projects\\ue\\ue-mcp\\tests\\ue_mcp\\plugins\\pie_studio\\source\\pie_studio\\private\\tests\\piesessionlogtest.cpp",
+        "ProvidedModule": "",
+        "PCH": "c:\\users\\david\\projects\\ue\\ue-mcp\\tests\\ue_mcp\\intermediate\\build\\win64\\x64\\ue_mcpeditor\\development\\unrealed\\sharedpch.unrealed.project.valapi.valexpapi.cpp20.h.pch",
+        "Includes": [
+            "c:\\users\\david\\projects\\ue\\ue-mcp\\tests\\ue_mcp\\plugins\\pie_studio\\intermediate\\build\\win64\\x64\\unrealeditor\\development\\pie_studio\\definitions.pie_studio.h",
+            "c:\\users\\david\\projects\\ue\\ue-mcp\\tests\\ue_mcp\\plugins\\pie_studio\\source\\pie_studio\\private\\pie\\piesessionlog.h",
+            "c:\\users\\david\\projects\\ue\\ue-mcp\\tests\\ue_mcp\\plugins\\pie_studio\\source\\pie_studio\\public\\pie_studiomodule.h"
+        ],
+        "ImportedModules": [],
+        "ImportedHeaderUnits": []
+    }
+}

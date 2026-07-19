@@ -36,15 +36,14 @@ bool FPIESessionLogCaptureTest::RunTest(const FString& /*Parameters*/)
 	Log.BeginSession(Dir);
 	TestTrue(TEXT("session is active after BeginSession"), Log.IsActive());
 
-	UE_LOG(LogPIEStudio, Error, TEXT("PIESESSIONLOGTEST_ERR_%s"), *Token);
-	UE_LOG(LogPIEStudio, Warning, TEXT("PIESESSIONLOGTEST_WARN_%s"), *Token);
-	UE_LOG(LogPIEStudio, Log, TEXT("PIESESSIONLOGTEST_INFO_%s"), *Token);
-
-	// Force the redirector to route buffered lines to our device before we read.
-	if (GLog)
-	{
-		GLog->Flush();
-	}
+	// Drive the capture path directly (this is exactly what GLog does when it
+	// routes to our FOutputDevice). We deliberately do NOT go through UE_LOG here:
+	// the automation harness intercepts Error/Warning log lines (and would auto-
+	// fail, or consume them before our device sees them if declared expected).
+	const FName Cat(TEXT("LogPIEStudio"));
+	Log.Serialize(*FString::Printf(TEXT("PIESESSIONLOGTEST_ERR_%s"), *Token), ELogVerbosity::Error, Cat);
+	Log.Serialize(*FString::Printf(TEXT("PIESESSIONLOGTEST_WARN_%s"), *Token), ELogVerbosity::Warning, Cat);
+	Log.Serialize(*FString::Printf(TEXT("PIESESSIONLOGTEST_INFO_%s"), *Token), ELogVerbosity::Log, Cat);
 
 	// In-memory summary should see at least the error and the warning.
 	{

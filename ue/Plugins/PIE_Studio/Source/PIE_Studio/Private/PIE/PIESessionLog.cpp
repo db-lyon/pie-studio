@@ -11,6 +11,7 @@
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 #include "UObject/UObjectGlobals.h"
+#include "Blueprint/BlueprintExceptionInfo.h" // full FBlueprintExceptionInfo + EBlueprintExceptionType (Script.h only forward-declares)
 
 namespace UEMCPPIE
 {

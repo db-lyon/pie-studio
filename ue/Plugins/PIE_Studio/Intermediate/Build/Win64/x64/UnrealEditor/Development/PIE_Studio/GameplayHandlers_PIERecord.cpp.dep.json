@@ -1,0 +1,29 @@
+{
+    "Version": "1.2",
+    "Data": {
+        "Source": "c:\\users\\david\\projects\\ue\\ue-mcp\\tests\\ue_mcp\\plugins\\pie_studio\\source\\pie_studio\\private\\handlers\\gameplayhandlers_pierecord.cpp",
+        "ProvidedModule": "",
+        "PCH": "c:\\users\\david\\projects\\ue\\ue-mcp\\tests\\ue_mcp\\intermediate\\build\\win64\\x64\\ue_mcpeditor\\development\\unrealed\\sharedpch.unrealed.project.valapi.valexpapi.cpp20.h.pch",
+        "Includes": [
+            "c:\\users\\david\\projects\\ue\\ue-mcp\\tests\\ue_mcp\\plugins\\pie_studio\\intermediate\\build\\win64\\x64\\unrealeditor\\development\\pie_studio\\definitions.pie_studio.h",
+            "c:\\users\\david\\projects\\ue\\ue-mcp\\tests\\ue_mcp\\plugins\\pie_studio\\source\\pie_studio\\private\\handlers\\gameplayhandlers.h",
+            "c:\\users\\david\\projects\\ue\\ue-mcp\\tests\\ue_mcp\\plugins\\ue_mcp_bridge\\source\\ue_mcp_bridge\\public\\handlerutils.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\coreuobject\\public\\uobject\\savepackage.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\core\\public\\serialization\\packagewriter.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\core\\public\\io\\iodispatcher.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\core\\public\\io\\iobuffer.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\core\\public\\io\\iocontainerid.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\core\\public\\misc\\ienginecrypto.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\coreuobject\\public\\uobject\\objectsaveoverride.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\engine\\public\\engineutils.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\source\\runtime\\core\\public\\misc\\stringoutputdevice.h",
+            "c:\\users\\david\\projects\\ue\\ue-mcp\\tests\\ue_mcp\\plugins\\pie_studio\\source\\pie_studio\\private\\pie\\pieinputrecorder.h",
+            "c:\\users\\david\\projects\\ue\\ue-mcp\\tests\\ue_mcp\\plugins\\pie_studio\\source\\pie_studio\\private\\pie\\pieframesampler.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\plugins\\enhancedinput\\source\\enhancedinput\\public\\inputactionvalue.h",
+            "c:\\program files\\epic games\\ue_5.8\\engine\\plugins\\enhancedinput\\intermediate\\build\\win64\\unrealeditor\\inc\\enhancedinput\\uht\\inputactionvalue.generated.h",
+            "c:\\users\\david\\projects\\ue\\ue-mcp\\tests\\ue_mcp\\plugins\\pie_studio\\source\\pie_studio\\private\\pie\\piesequenceformat.h"
+        ],
+        "ImportedModules": [],
+        "ImportedHeaderUnits": []
+    }
+}
