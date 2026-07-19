@@ -18,6 +18,14 @@
 #include "Animation/AnimMontage.h"
 #include "InputAction.h"
 #include "UObject/UnrealType.h"
+#include "RenderCore.h"       // GGameThreadTime / GRenderThreadTime
+#include "RHI.h"              // RHIGetGPUFrameTime
+#include "HAL/PlatformTime.h"
+#include "HAL/PlatformMemory.h"
+#include "Engine/GameInstance.h"
+#include "Subsystems/GameInstanceSubsystem.h"
+#include "Subsystems/WorldSubsystem.h"
+#include "Subsystems/LocalPlayerSubsystem.h"
 
 namespace UEMCPPIE
 {
@@ -122,6 +130,41 @@ namespace UEMCPPIE
 				}
 			}
 			return false;
+		}
+
+		// Resolve a subsystem in the PIE world by short (or "U"-prefixed) class
+		// name, so tracked paths of the form "sub:MyGameSubsystem.Phase" can be
+		// sampled per frame (item 2b).
+		UObject* ResolveSubsystemByName(UWorld* World, const FString& ClassName)
+		{
+			if (!World) return nullptr;
+			auto Match = [&ClassName](UObject* O) -> bool
+			{
+				if (!O) return false;
+				const FString N = O->GetClass()->GetName();
+				return N == ClassName
+					|| N == (FString(TEXT("U")) + ClassName)
+					|| O->GetClass()->GetPathName() == ClassName;
+			};
+			if (UGameInstance* GI = World->GetGameInstance())
+			{
+				for (UGameInstanceSubsystem* S : GI->GetSubsystemArrayCopy<UGameInstanceSubsystem>())
+				{
+					if (Match(S)) return S;
+				}
+				if (ULocalPlayer* LP = GI->GetFirstGamePlayer())
+				{
+					for (ULocalPlayerSubsystem* S : LP->GetSubsystemArrayCopy<ULocalPlayerSubsystem>())
+					{
+						if (Match(S)) return S;
+					}
+				}
+			}
+			for (UWorldSubsystem* S : World->GetSubsystemArrayCopy<UWorldSubsystem>())
+			{
+				if (Match(S)) return S;
+			}
+			return nullptr;
 		}
 	}
 
@@ -247,6 +290,13 @@ namespace UEMCPPIE
 		Row.Time = GameTime;
 		Row.Dt = DeltaTime;
 
+		// Per-frame performance (item 4a). Cheap global reads; populated every
+		// frame so the recorder can persist them and perf_summary can aggregate.
+		Row.GameMs = static_cast<float>(FPlatformTime::ToMilliseconds(GGameThreadTime));
+		Row.RenderMs = static_cast<float>(FPlatformTime::ToMilliseconds(GRenderThreadTime));
+		Row.GpuMs = static_cast<float>(FPlatformTime::ToMilliseconds(RHIGetGPUFrameCycles()));
+		Row.MemMB = static_cast<float>(FPlatformMemory::GetStats().UsedPhysical / (1024.0 * 1024.0));
+
 		if (!PIEWorld) return Row;
 		APlayerController* PC = (Config.ClientIndex > 0)
 			? UGameplayStatics::GetPlayerController(PIEWorld, Config.ClientIndex)
@@ -370,11 +420,27 @@ namespace UEMCPPIE
 			}
 		}
 
-		// Tracked reflection values: resolve against the pawn as the root.
+		// Tracked reflection values: resolve against the pawn, or against a named
+		// subsystem for "sub:<Class>.<path>" entries (item 2b).
 		for (const FTrackedValueSpec& S : TrackedValues)
 		{
 			double Val = 0.0;
-			if (ResolvePathToDouble(Pawn, S.Path, Val))
+			if (S.Path.StartsWith(TEXT("sub:")))
+			{
+				const FString Rest = S.Path.RightChop(4);
+				FString ClassName, PropPath;
+				if (Rest.Split(TEXT("."), &ClassName, &PropPath))
+				{
+					if (UObject* SubObj = ResolveSubsystemByName(PIEWorld, ClassName))
+					{
+						if (ResolvePathToDouble(SubObj, PropPath, Val))
+						{
+							Row.TrackedValues.Add(S.Path, Val);
+						}
+					}
+				}
+			}
+			else if (ResolvePathToDouble(Pawn, S.Path, Val))
 			{
 				Row.TrackedValues.Add(S.Path, Val);
 			}

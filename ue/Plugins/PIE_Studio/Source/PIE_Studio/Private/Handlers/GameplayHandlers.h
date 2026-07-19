@@ -12,6 +12,23 @@ public:
 	static TSharedPtr<FJsonValue> GetPieAnimProperties(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> GetPieSubsystemState(const TSharedPtr<FJsonObject>& Params);
 
+	// Session log / errors
+	static TSharedPtr<FJsonValue> PieSessionErrors(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieSessionLog(const TSharedPtr<FJsonObject>& Params);
+
+	// Standalone viewport capture
+	static TSharedPtr<FJsonValue> PieCapture(const TSharedPtr<FJsonObject>& Params);
+
+	// Profiling
+	static TSharedPtr<FJsonValue> PieTraceStart(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieTraceStop(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PiePerfSummary(const TSharedPtr<FJsonObject>& Params);
+
+	// Reproduction tests
+	static TSharedPtr<FJsonValue> PieTestScaffold(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieTestRun(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieTestList(const TSharedPtr<FJsonObject>& Params);
+
 	// Input injection
 	static TSharedPtr<FJsonValue> InjectInput(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> InjectInputStart(const TSharedPtr<FJsonObject>& Params);
@@ -35,6 +52,8 @@ public:
 	static TSharedPtr<FJsonValue> PieReplayDisarm(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> PieReplayStop(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> PieReplayStatus(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieReplayAnalyze(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieReplayState(const TSharedPtr<FJsonObject>& Params);
 
 	// Diff / Snapshot
 	static TSharedPtr<FJsonValue> PieRecordDiff(const TSharedPtr<FJsonObject>& Params);

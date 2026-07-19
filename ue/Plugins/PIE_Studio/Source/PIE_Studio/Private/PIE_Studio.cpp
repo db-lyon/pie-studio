@@ -6,6 +6,7 @@
 #include "PIE/PIEInputRecorder.h"
 #include "PIE/PIEInputReplayer.h"
 #include "PIE/PIEObserver.h"
+#include "PIE/PIESessionLog.h"
 #include "UI/SMCPPIEPanel.h"
 #include "Editor.h"
 #include "Misc/CoreDelegates.h"
@@ -20,6 +21,7 @@ void FPIE_StudioModule::StartupModule()
 	UEMCPPIE::FPIEInputRecorder::Get().Init();
 	UEMCPPIE::FPIEInputReplayer::Get().Init();
 	UEMCPPIE::FPIEObserver::Get().Init();
+	UEMCPPIE::FPIESessionLog::Get().Init();
 	SMCPPIEPanel::RegisterTab();
 	SMCPPIEPanel::RegisterToolbarButton();
 
@@ -55,6 +57,8 @@ void FPIE_StudioModule::StartupModule()
 	UEMCP::RegisterExternalHandler(TEXT("replay_disarm"), &FGameplayHandlers::PieReplayDisarm);
 	UEMCP::RegisterExternalHandler(TEXT("replay_stop"), &FGameplayHandlers::PieReplayStop);
 	UEMCP::RegisterExternalHandler(TEXT("replay_status"), &FGameplayHandlers::PieReplayStatus);
+	UEMCP::RegisterExternalHandler(TEXT("replay_analyze"), &FGameplayHandlers::PieReplayAnalyze);
+	UEMCP::RegisterExternalHandler(TEXT("replay_state"), &FGameplayHandlers::PieReplayState);
 
 	// Diff / Snapshot
 	UEMCP::RegisterExternalHandler(TEXT("record_diff"), &FGameplayHandlers::PieRecordDiff);
@@ -80,6 +84,21 @@ void FPIE_StudioModule::StartupModule()
 	UEMCP::RegisterExternalHandler(TEXT("anim_properties"), &FGameplayHandlers::GetPieAnimProperties);
 	UEMCP::RegisterExternalHandler(TEXT("subsystem_state"), &FGameplayHandlers::GetPieSubsystemState);
 
+	// Session log / errors + standalone capture
+	UEMCP::RegisterExternalHandler(TEXT("session_errors"), &FGameplayHandlers::PieSessionErrors);
+	UEMCP::RegisterExternalHandler(TEXT("session_log"), &FGameplayHandlers::PieSessionLog);
+	UEMCP::RegisterExternalHandler(TEXT("capture"), &FGameplayHandlers::PieCapture);
+
+	// Profiling
+	UEMCP::RegisterExternalHandler(TEXT("trace_start"), &FGameplayHandlers::PieTraceStart);
+	UEMCP::RegisterExternalHandler(TEXT("trace_stop"), &FGameplayHandlers::PieTraceStop);
+	UEMCP::RegisterExternalHandler(TEXT("perf_summary"), &FGameplayHandlers::PiePerfSummary);
+
+	// Reproduction tests
+	UEMCP::RegisterExternalHandler(TEXT("test_scaffold"), &FGameplayHandlers::PieTestScaffold);
+	UEMCP::RegisterExternalHandler(TEXT("test_run"), &FGameplayHandlers::PieTestRun);
+	UEMCP::RegisterExternalHandler(TEXT("test_list"), &FGameplayHandlers::PieTestList);
+
 	// CPU throttle suppression while recording/replaying/observing
 	FTSTicker::GetCoreTicker().AddTicker(
 		FTickerDelegate::CreateLambda([](float) -> bool
@@ -104,7 +123,7 @@ void FPIE_StudioModule::StartupModule()
 		})
 	);
 
-	UE_LOG(LogPIEStudio, Log, TEXT("[pie-studio] Registered %d handlers"), 34);
+	UE_LOG(LogPIEStudio, Log, TEXT("[pie-studio] Registered %d handlers"), 45);
 }
 
 void FPIE_StudioModule::ShutdownModule()
@@ -131,6 +150,8 @@ void FPIE_StudioModule::ShutdownModule()
 	UEMCP::UnregisterExternalHandler(TEXT("replay_disarm"));
 	UEMCP::UnregisterExternalHandler(TEXT("replay_stop"));
 	UEMCP::UnregisterExternalHandler(TEXT("replay_status"));
+	UEMCP::UnregisterExternalHandler(TEXT("replay_analyze"));
+	UEMCP::UnregisterExternalHandler(TEXT("replay_state"));
 	UEMCP::UnregisterExternalHandler(TEXT("record_diff"));
 	UEMCP::UnregisterExternalHandler(TEXT("snapshot"));
 	UEMCP::UnregisterExternalHandler(TEXT("profile_create"));
@@ -147,7 +168,17 @@ void FPIE_StudioModule::ShutdownModule()
 	UEMCP::UnregisterExternalHandler(TEXT("anim_state"));
 	UEMCP::UnregisterExternalHandler(TEXT("anim_properties"));
 	UEMCP::UnregisterExternalHandler(TEXT("subsystem_state"));
+	UEMCP::UnregisterExternalHandler(TEXT("session_errors"));
+	UEMCP::UnregisterExternalHandler(TEXT("session_log"));
+	UEMCP::UnregisterExternalHandler(TEXT("capture"));
+	UEMCP::UnregisterExternalHandler(TEXT("trace_start"));
+	UEMCP::UnregisterExternalHandler(TEXT("trace_stop"));
+	UEMCP::UnregisterExternalHandler(TEXT("perf_summary"));
+	UEMCP::UnregisterExternalHandler(TEXT("test_scaffold"));
+	UEMCP::UnregisterExternalHandler(TEXT("test_run"));
+	UEMCP::UnregisterExternalHandler(TEXT("test_list"));
 
+	UEMCPPIE::FPIESessionLog::Get().Shutdown();
 	UEMCPPIE::FPIEObserver::Get().Shutdown();
 	UEMCPPIE::FPIEInputReplayer::Get().Shutdown();
 	UEMCPPIE::FPIEInputRecorder::Get().Shutdown();

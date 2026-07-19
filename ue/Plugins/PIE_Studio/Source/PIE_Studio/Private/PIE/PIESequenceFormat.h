@@ -24,7 +24,9 @@ class AActor;
  */
 namespace UEMCPPIE
 {
-	constexpr int32 kFormatVersion = 1;
+	// v2 (item 4a/1c/2b): added drift summary block, perf CSV columns, and series
+	// reads. All additive; readers accept any version <= kFormatVersion.
+	constexpr int32 kFormatVersion = 2;
 
 	enum class EActionValueType : uint8
 	{
@@ -157,6 +159,34 @@ namespace UEMCPPIE
 		int32 FramesUnresolvedInReplay = 0;
 	};
 
+	// The single frame/channel where the replay first diverged past threshold.
+	// The most actionable field in the whole report (item 1c).
+	struct FDriftDivergence
+	{
+		bool bFound = false;
+		uint64 Frame = 0;
+		double Time = 0.0;        // seconds since replay attach
+		FString Channel;          // "position" | "velocity" | "rotation" | tracked path
+		double Delta = 0.0;
+		double Threshold = 0.0;
+		double SourceValue = 0.0; // scalar where meaningful (velocity/rotation/tracked)
+		double ReplayValue = 0.0;
+	};
+
+	// A synthesised lead the agent reads instead of the raw CSV (item 1c).
+	struct FDriftSummary
+	{
+		bool bValid = false;
+		FDriftDivergence First;
+		// Channel -> max |delta| across the run, ranked descending.
+		TArray<TPair<FString, float>> TopChannels;
+		int32 ErrorsDuringRun = 0;
+		int32 WarningsDuringRun = 0;
+		FString TopError;         // most-relevant error message logged during the run
+		uint64 TopErrorFrame = 0;
+		FString SessionDir;       // where session_errors.json / session_log.jsonl live
+	};
+
 	struct FDriftReport
 	{
 		int32 Version = kFormatVersion;
@@ -172,6 +202,7 @@ namespace UEMCPPIE
 		TMap<FString, float> TrackedValueMaxDeltas;
 		TMap<FString, FActorDrift> ActorDrift;
 		TArray<FDriftFrameEntry> FramesOverThreshold;
+		FDriftSummary Summary;
 	};
 
 	// CSV row used by both the recorder (writing) and the replayer / diff
@@ -190,6 +221,12 @@ namespace UEMCPPIE
 		TMap<FString, FVector> ActionValues;
 		TMap<FString, double> TrackedValues;
 		TArray<FString> EdgeEvents;
+		// Per-frame performance (item 4a). Written to recording.csv as
+		// game_ms/render_ms/gpu_ms/mem_mb; consumed by perf_summary.
+		float GameMs = 0.f;
+		float RenderMs = 0.f;
+		float GpuMs = 0.f;
+		float MemMB = 0.f;
 	};
 
 	// ── JSON serialization ───────────────────────────────────────────────
@@ -234,6 +271,8 @@ namespace UEMCPPIE
 	FString BuildCSVHeader(const FCSVHeader& H);
 	void AppendCSVRow(FString& Body, const FCSVRow& Row, const FCSVHeader& H);
 	bool SaveCSV(const FString& Path, const FString& HeaderAndBody, FString& OutError);
+	// Quote-aware split of a single CSV line (handles "a,b" and "" escaping).
+	TArray<FString> SplitCSVLine(const FString& Line);
 
 	// ── Recording-directory helpers ──────────────────────────────────────
 

@@ -8,6 +8,7 @@
 #include "Editor.h"
 #include "Editor/EditorEngine.h"
 #include "Misc/Paths.h"
+#include "HAL/FileManager.h"
 
 namespace
 {
@@ -48,6 +49,10 @@ namespace
 			Last->SetNumberField(TEXT("max_position_drift_cm"), S.LastMaxPositionDriftCm);
 			Last->SetNumberField(TEXT("max_velocity_drift_cms"), S.LastMaxVelocityDriftCms);
 			Last->SetNumberField(TEXT("frames_compared"), S.LastFramesCompared);
+			// Item 1b: kept frames + labeled contact sheet the agent can view.
+			if (!S.LastFrameDir.IsEmpty()) Last->SetStringField(TEXT("frame_dir"), S.LastFrameDir);
+			if (S.LastFrameCount > 0) Last->SetNumberField(TEXT("frame_count"), S.LastFrameCount);
+			if (!S.LastContactSheetPath.IsEmpty()) Last->SetStringField(TEXT("contact_sheet_path"), S.LastContactSheetPath);
 			R->SetObjectField(TEXT("last_result"), Last);
 		}
 	}
@@ -106,6 +111,8 @@ namespace
 		Cfg.bApplyRngSeed = OptionalBool(Params, TEXT("apply_rng_seed"), true);
 		Cfg.bRecordDrift  = OptionalBool(Params, TEXT("record_drift"), true);
 		Cfg.bAutoStopPIE  = OptionalBool(Params, TEXT("auto_stop_pie"), false);
+		Cfg.bEncodeGif    = OptionalBool(Params, TEXT("encode_gif"), false);
+		Cfg.bFixedTimestep = OptionalBool(Params, TEXT("fixed_timestep"), false);
 		Cfg.bEject        = OptionalBool(Params, TEXT("eject"), false);
 		Cfg.TimeScale     = static_cast<float>(OptionalNumber(Params, TEXT("time_scale"), 1.0));
 		const FString Mode = OptionalString(Params, TEXT("mode"), TEXT("replay")).ToLower();
@@ -242,6 +249,15 @@ TSharedPtr<FJsonValue> FGameplayHandlers::PieReplayStop(const TSharedPtr<FJsonOb
 	Result->SetBoolField(TEXT("stopped"), true);
 	Result->SetNumberField(TEXT("executed_steps"), F.ExecutedSteps);
 	Result->SetNumberField(TEXT("frames_captured"), F.FramesCaptured);
+	if (F.FrameCount > 0)
+	{
+		Result->SetStringField(TEXT("frame_dir"), F.FrameDir);
+		Result->SetNumberField(TEXT("frame_count"), F.FrameCount);
+		if (!F.ContactSheetPath.IsEmpty())
+		{
+			Result->SetStringField(TEXT("contact_sheet_path"), F.ContactSheetPath);
+		}
+	}
 	if (!F.CaptureDir.IsEmpty())
 	{
 		Result->SetStringField(TEXT("capture_dir"), F.CaptureDir);
@@ -270,4 +286,76 @@ TSharedPtr<FJsonValue> FGameplayHandlers::PieReplayStatus(const TSharedPtr<FJson
 	auto Result = MCPSuccess();
 	WriteStatusFields(Result, S);
 	return MCPResult(Result);
+}
+
+// Item 1c: read a finalised drift.json and return the synthesised lead (first
+// divergence, top channels, correlated errors) plus the images bracketing the
+// divergence frame, so the agent gets a conclusion instead of a CSV.
+TSharedPtr<FJsonValue> FGameplayHandlers::PieReplayAnalyze(const TSharedPtr<FJsonObject>& Params)
+{
+	MCP_CHECK_GAME_THREAD();
+	const FString Id = OptionalString(Params, TEXT("recording_id"));
+	const FString RecDir = OptionalString(Params, TEXT("recording_dir"));
+
+	FString Folder;
+	if (!RecDir.IsEmpty() && Id.IsEmpty())
+	{
+		Folder = RecDir;
+	}
+	else
+	{
+		const FString Root = RecDir.IsEmpty()
+			? (FPaths::ProjectSavedDir() / TEXT("MCPRecordings"))
+			: RecDir;
+		Folder = Root / Id;
+	}
+	Folder.RemoveFromEnd(TEXT("/"));
+	Folder.RemoveFromEnd(TEXT("\\"));
+
+	const FString DriftPath = Folder / TEXT("drift.json");
+	FDriftReport D;
+	FString Err;
+	if (!LoadDrift(DriftPath, D, Err))
+	{
+		return MCPError(FString::Printf(TEXT("Could not read drift report at %s: %s"), *DriftPath, *Err));
+	}
+
+	// The serialized report already carries the summary block.
+	TSharedRef<FJsonObject> Report = DriftToJson(D);
+	Report->SetStringField(TEXT("drift_report_path"), DriftPath);
+
+	// Images bracketing the divergence frame, if frames were captured.
+	if (D.Summary.First.bFound)
+	{
+		const uint64 F = D.Summary.First.Frame;
+		TArray<TSharedPtr<FJsonValue>> Bracket;
+		for (int32 Off = -1; Off <= 1; ++Off)
+		{
+			const int64 N = static_cast<int64>(F) + Off;
+			if (N < 0) continue;
+			const FString P = Folder / TEXT("frames") / FString::Printf(TEXT("frame_%05lld.jpg"), N);
+			if (FPaths::FileExists(P))
+			{
+				Bracket.Add(MakeShared<FJsonValueString>(P));
+			}
+		}
+		if (Bracket.Num() > 0)
+		{
+			Report->SetArrayField(TEXT("divergence_frames"), Bracket);
+		}
+	}
+
+	// Newest contact sheet, if present.
+	{
+		const FString CapturesDir = Folder / TEXT("captures");
+		TArray<FString> Sheets;
+		IFileManager::Get().FindFiles(Sheets, *(CapturesDir / TEXT("contact_*.jpg")), true, false);
+		if (Sheets.Num() > 0)
+		{
+			Sheets.Sort();
+			Report->SetStringField(TEXT("contact_sheet_path"), CapturesDir / Sheets.Last());
+		}
+	}
+
+	return MCPResult(Report);
 }

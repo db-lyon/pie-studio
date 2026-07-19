@@ -71,6 +71,31 @@ namespace UEMCPPIE
 		}
 	}
 
+	TArray<FString> SplitCSVLine(const FString& Line)
+	{
+		TArray<FString> Out;
+		FString Cur;
+		bool bInQuotes = false;
+		for (int32 i = 0; i < Line.Len(); ++i)
+		{
+			const TCHAR C = Line[i];
+			if (bInQuotes)
+			{
+				if (C == TEXT('"'))
+				{
+					if (i + 1 < Line.Len() && Line[i + 1] == TEXT('"')) { Cur.AppendChar('"'); ++i; }
+					else { bInQuotes = false; }
+				}
+				else { Cur.AppendChar(C); }
+			}
+			else if (C == TEXT('"')) { bInQuotes = true; }
+			else if (C == TEXT(',')) { Out.Add(Cur); Cur.Reset(); }
+			else { Cur.AppendChar(C); }
+		}
+		Out.Add(Cur);
+		return Out;
+	}
+
 	FString ActionValueTypeToString(EActionValueType Type)
 	{
 		switch (Type)
@@ -205,7 +230,7 @@ namespace UEMCPPIE
 			return false;
 		}
 		Out.Version = V;
-		if (Out.Version != kFormatVersion)
+		if (Out.Version > kFormatVersion || Out.Version < 1)
 		{
 			OutError = FString::Printf(TEXT("manifest: unsupported version %d (expected %d)"), Out.Version, kFormatVersion);
 			return false;
@@ -416,7 +441,7 @@ namespace UEMCPPIE
 			return false;
 		}
 		Out.Version = V;
-		if (Out.Version != kFormatVersion)
+		if (Out.Version > kFormatVersion || Out.Version < 1)
 		{
 			OutError = FString::Printf(TEXT("sequence: unsupported version %d (expected %d)"), Out.Version, kFormatVersion);
 			return false;
@@ -537,6 +562,52 @@ namespace UEMCPPIE
 		}
 		O->SetArrayField(TEXT("frames_over_threshold"), Frames);
 
+		// Synthesised lead (item 1c): first divergence + ranked channels + errors.
+		if (D.Summary.bValid)
+		{
+			TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
+			const FDriftDivergence& Fd = D.Summary.First;
+			if (Fd.bFound)
+			{
+				TSharedRef<FJsonObject> FD = MakeShared<FJsonObject>();
+				FD->SetNumberField(TEXT("frame"), static_cast<double>(Fd.Frame));
+				FD->SetNumberField(TEXT("time"), Fd.Time);
+				FD->SetStringField(TEXT("channel"), Fd.Channel);
+				FD->SetNumberField(TEXT("delta"), Fd.Delta);
+				FD->SetNumberField(TEXT("threshold"), Fd.Threshold);
+				FD->SetNumberField(TEXT("source_value"), Fd.SourceValue);
+				FD->SetNumberField(TEXT("replay_value"), Fd.ReplayValue);
+				S->SetObjectField(TEXT("first_divergence"), FD);
+			}
+			else
+			{
+				S->SetBoolField(TEXT("diverged"), false);
+			}
+
+			TArray<TSharedPtr<FJsonValue>> Top;
+			for (const TPair<FString, float>& KV : D.Summary.TopChannels)
+			{
+				TSharedRef<FJsonObject> T = MakeShared<FJsonObject>();
+				T->SetStringField(TEXT("channel"), KV.Key);
+				T->SetNumberField(TEXT("max_delta"), KV.Value);
+				Top.Add(MakeShared<FJsonValueObject>(T));
+			}
+			S->SetArrayField(TEXT("top_channels"), Top);
+
+			S->SetNumberField(TEXT("errors_during_run"), D.Summary.ErrorsDuringRun);
+			S->SetNumberField(TEXT("warnings_during_run"), D.Summary.WarningsDuringRun);
+			if (!D.Summary.TopError.IsEmpty())
+			{
+				S->SetStringField(TEXT("top_error"), D.Summary.TopError);
+				S->SetNumberField(TEXT("top_error_frame"), static_cast<double>(D.Summary.TopErrorFrame));
+			}
+			if (!D.Summary.SessionDir.IsEmpty())
+			{
+				S->SetStringField(TEXT("session_dir"), D.Summary.SessionDir);
+			}
+			O->SetObjectField(TEXT("summary"), S);
+		}
+
 		return O;
 	}
 
@@ -609,6 +680,44 @@ namespace UEMCPPIE
 				DD = 0; FO->TryGetNumberField(TEXT("rotation_delta_deg"), DD); E.RotationDeltaDeg = static_cast<float>(DD);
 				Out.FramesOverThreshold.Add(E);
 			}
+		}
+
+		const TSharedPtr<FJsonObject>* SumObj = nullptr;
+		if (Obj->TryGetObjectField(TEXT("summary"), SumObj) && SumObj)
+		{
+			Out.Summary.bValid = true;
+			const TSharedPtr<FJsonObject>* FD = nullptr;
+			if ((*SumObj)->TryGetObjectField(TEXT("first_divergence"), FD) && FD)
+			{
+				FDriftDivergence& Fd = Out.Summary.First;
+				Fd.bFound = true;
+				double DD = 0;
+				(*FD)->TryGetNumberField(TEXT("frame"), DD); Fd.Frame = static_cast<uint64>(DD);
+				(*FD)->TryGetNumberField(TEXT("time"), Fd.Time);
+				(*FD)->TryGetStringField(TEXT("channel"), Fd.Channel);
+				(*FD)->TryGetNumberField(TEXT("delta"), Fd.Delta);
+				(*FD)->TryGetNumberField(TEXT("threshold"), Fd.Threshold);
+				(*FD)->TryGetNumberField(TEXT("source_value"), Fd.SourceValue);
+				(*FD)->TryGetNumberField(TEXT("replay_value"), Fd.ReplayValue);
+			}
+			const TArray<TSharedPtr<FJsonValue>>* Top = nullptr;
+			if ((*SumObj)->TryGetArrayField(TEXT("top_channels"), Top) && Top)
+			{
+				for (const TSharedPtr<FJsonValue>& VV : *Top)
+				{
+					const TSharedPtr<FJsonObject>& TO = VV->AsObject();
+					if (!TO.IsValid()) continue;
+					FString Ch; double MD = 0;
+					TO->TryGetStringField(TEXT("channel"), Ch);
+					TO->TryGetNumberField(TEXT("max_delta"), MD);
+					Out.Summary.TopChannels.Add(TPair<FString, float>(Ch, static_cast<float>(MD)));
+				}
+			}
+			int32 EC = 0; (*SumObj)->TryGetNumberField(TEXT("errors_during_run"), EC); Out.Summary.ErrorsDuringRun = EC;
+			int32 WC = 0; (*SumObj)->TryGetNumberField(TEXT("warnings_during_run"), WC); Out.Summary.WarningsDuringRun = WC;
+			(*SumObj)->TryGetStringField(TEXT("top_error"), Out.Summary.TopError);
+			double TEF = 0; (*SumObj)->TryGetNumberField(TEXT("top_error_frame"), TEF); Out.Summary.TopErrorFrame = static_cast<uint64>(TEF);
+			(*SumObj)->TryGetStringField(TEXT("session_dir"), Out.Summary.SessionDir);
 		}
 		return true;
 	}
@@ -703,6 +812,9 @@ namespace UEMCPPIE
 		{
 			Out += FString::Printf(TEXT(",t:%s"), *T.Path);
 		}
+		// Perf columns (item 4a) sit before the free-form event column so a naive
+		// comma split still lands them correctly even if an event field is quoted.
+		Out += TEXT(",game_ms,render_ms,gpu_ms,mem_mb");
 		Out += TEXT(",event\n");
 		return Out;
 	}
@@ -744,6 +856,9 @@ namespace UEMCPPIE
 			const double* DV = Row.TrackedValues.Find(T.Path);
 			Body += FString::Printf(TEXT(",%.6f"), DV ? *DV : 0.0);
 		}
+
+		Body += FString::Printf(TEXT(",%.3f,%.3f,%.3f,%.1f"),
+			Row.GameMs, Row.RenderMs, Row.GpuMs, Row.MemMB);
 
 		FString Events = FString::Join(Row.EdgeEvents, TEXT("|"));
 		Body += FString::Printf(TEXT(",%s\n"), *CSVEscape(Events));

@@ -3,3 +3,10 @@ dist/
 *.tgz
 *.tmp
 .DS_Store
+
+# Unreal Engine build artifacts (generated when compiling the plugin in a host project)
+Binaries/
+Intermediate/
+DerivedDataCache/
+Saved/
+*.sarif

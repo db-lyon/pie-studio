@@ -1,6 +1,8 @@
 #include "PIEInputReplayer.h"
 #include "PIEViewportCapture.h"
 #include "PIEGifEncoder.h"
+#include "PIEContactSheet.h"
+#include "PIESessionLog.h"
 #include "PIEInputInjector.h"
 #include "PIE_StudioModule.h"
 #include "Editor.h"
@@ -13,6 +15,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "HAL/PlatformFileManager.h"
 #include "HAL/FileManager.h"
+#include "Misc/App.h"
 #include "Misc/CoreDelegates.h"
 #include "Misc/DateTime.h"
 #include "Misc/FileHelper.h"
@@ -285,6 +288,7 @@ namespace UEMCPPIE
 		MaxVelDriftCms = 0.f;
 		MaxRotDriftDeg = 0.f;
 		MontageMismatches = 0;
+		FirstDivergence = FDriftDivergence();
 		FramesCompared = 0;
 		FramesMissingInReplay = 0;
 		MaxTrackedDeltas.Reset();
@@ -395,6 +399,32 @@ namespace UEMCPPIE
 		const FString Cmd = FString::Printf(TEXT("t.MaxFPS %d"), Hz);
 		GEngine->Exec(PIEWorld, *Cmd);
 		UE_LOG(LogPIEStudio, Log, TEXT("[PIE-REP] %s"), *Cmd);
+
+		// Item X2: opt-in fixed timestep for stronger reproducibility.
+		if (Pending.bFixedTimestep)
+		{
+			ApplyFixedTimestep(Hz);
+		}
+	}
+
+	void FPIEInputReplayer::ApplyFixedTimestep(int32 Hz)
+	{
+		if (bFixedTimestepApplied || Hz <= 0) return;
+		bSavedUseFixedTimestep = FApp::UseFixedTimeStep();
+		bSavedFixedDeltaTime = FApp::GetFixedDeltaTime();
+		FApp::SetFixedDeltaTime(1.0 / static_cast<double>(Hz));
+		FApp::SetUseFixedTimeStep(true);
+		bFixedTimestepApplied = true;
+		UE_LOG(LogPIEStudio, Log, TEXT("[PIE-REP] Fixed timestep on: %.4f s (%d Hz)"), 1.0 / Hz, Hz);
+	}
+
+	void FPIEInputReplayer::RestoreFixedTimestep()
+	{
+		if (!bFixedTimestepApplied) return;
+		FApp::SetUseFixedTimeStep(bSavedUseFixedTimestep);
+		FApp::SetFixedDeltaTime(bSavedFixedDeltaTime);
+		bFixedTimestepApplied = false;
+		UE_LOG(LogPIEStudio, Log, TEXT("[PIE-REP] Fixed timestep restored"));
 	}
 
 	void FPIEInputReplayer::OnBeginPIE(bool /*bIsSimulating*/)
@@ -427,6 +457,7 @@ namespace UEMCPPIE
 		if (Pending.CaptureFrameEvery > 0 && !ViewportCapture.IsValid())
 		{
 			ViewportCapture = FSceneViewExtensions::NewExtension<FPIEViewportCapture>();
+			ViewportCapture->SetOutputFormat(/*bJpeg*/true, /*Quality*/80);
 			ViewportCapture->SetEnabled(true);
 		}
 
@@ -624,7 +655,7 @@ namespace UEMCPPIE
 				const uint64 FrameIdx = static_cast<uint64>(CaptureFrameCounter);
 				if ((FrameIdx % static_cast<uint64>(Pending.CaptureFrameEvery)) == 0)
 				{
-					const FString FullPath = CaptureDir / FString::Printf(TEXT("frame_%05llu.png"), FrameIdx);
+					const FString FullPath = CaptureDir / FString::Printf(TEXT("frame_%05llu.jpg"), FrameIdx);
 					ViewportCapture->RequestCapture(FullPath);
 				}
 				CaptureFrameCounter++;
@@ -675,6 +706,70 @@ namespace UEMCPPIE
 					    bTrackedOver)
 					{
 						DriftFrames.Add(E);
+
+						// First divergence (item 1c): pick the channel that crossed
+						// by the largest ratio on this, the earliest, over-threshold
+						// frame. Retain the exact source/replay scalars.
+						if (!FirstDivergence.bFound)
+						{
+							const double PosR = (Pending.ThrPosCm > 0.f) ? E.PositionDeltaCm / Pending.ThrPosCm : 0.0;
+							const double VelR = (Pending.ThrVelCms > 0.f) ? E.VelocityDeltaCms / Pending.ThrVelCms : 0.0;
+							const double RotR = (Pending.ThrRotDeg > 0.f) ? E.RotationDeltaDeg / Pending.ThrRotDeg : 0.0;
+
+							FDriftDivergence& Fd = FirstDivergence;
+							Fd.bFound = true;
+							Fd.Frame = ReplayFrame;
+							Fd.Time = (ActiveSequence.SampleHz > 0)
+								? static_cast<double>(ReplayFrame) / ActiveSequence.SampleHz
+								: 0.0;
+
+							if (VelR >= PosR && VelR >= RotR && VelR > 0.0)
+							{
+								Fd.Channel = TEXT("velocity");
+								Fd.Delta = E.VelocityDeltaCms;
+								Fd.Threshold = Pending.ThrVelCms;
+								Fd.SourceValue = Src.PawnVelocity.Size();
+								Fd.ReplayValue = Row.PawnVelocity.Size();
+							}
+							else if (RotR >= PosR && RotR > 0.0)
+							{
+								Fd.Channel = TEXT("rotation");
+								Fd.Delta = E.RotationDeltaDeg;
+								Fd.Threshold = Pending.ThrRotDeg;
+								Fd.SourceValue = Src.PawnRotation.Euler().Size();
+								Fd.ReplayValue = Row.PawnRotation.Euler().Size();
+							}
+							else if (PosR > 0.0)
+							{
+								Fd.Channel = TEXT("position");
+								Fd.Delta = E.PositionDeltaCm;
+								Fd.Threshold = Pending.ThrPosCm;
+								Fd.SourceValue = Src.PawnLocation.Size();
+								Fd.ReplayValue = Row.PawnLocation.Size();
+							}
+							else
+							{
+								// A tracked reflection value crossed first.
+								Fd.Channel = TEXT("tracked");
+								double BestRatio = 0.0;
+								for (const TPair<FString, double>& KV : Src.TrackedValues)
+								{
+									const double* Cur = Row.TrackedValues.Find(KV.Key);
+									const double Dl = FMath::Abs((Cur ? *Cur : 0.0) - KV.Value);
+									const float* PerPath = Pending.TrackedThresholds.Find(KV.Key);
+									const float Thr = PerPath ? *PerPath : Pending.ThrTrackedDefault;
+									if (Thr > 0.f && Dl > Thr && (Dl / Thr) > BestRatio)
+									{
+										BestRatio = Dl / Thr;
+										Fd.Channel = KV.Key;
+										Fd.Delta = Dl;
+										Fd.Threshold = Thr;
+										Fd.SourceValue = KV.Value;
+										Fd.ReplayValue = Cur ? *Cur : 0.0;
+									}
+								}
+							}
+						}
 					}
 
 					// Per-tracked-actor drift: walk the same frame index in
@@ -795,6 +890,49 @@ namespace UEMCPPIE
 			D.TrackedValueMaxDeltas = MaxTrackedDeltas;
 			D.ActorDrift = ActorDriftAccum;
 			D.FramesOverThreshold = DriftFrames;
+
+			// Item 1c: synthesise the lead the agent reads instead of the CSV.
+			D.Summary.bValid = true;
+			D.Summary.First = FirstDivergence;
+			{
+				TArray<TPair<FString, float>> Top;
+				Top.Add(TPair<FString, float>(TEXT("position_cm"), MaxPosDriftCm));
+				Top.Add(TPair<FString, float>(TEXT("velocity_cms"), MaxVelDriftCms));
+				Top.Add(TPair<FString, float>(TEXT("rotation_deg"), MaxRotDriftDeg));
+				for (const TPair<FString, float>& KV : MaxTrackedDeltas)
+				{
+					Top.Add(KV);
+				}
+				Top.Sort([](const TPair<FString, float>& A, const TPair<FString, float>& B) { return A.Value > B.Value; });
+				if (Top.Num() > 5) Top.SetNum(5);
+				D.Summary.TopChannels = MoveTemp(Top);
+			}
+			{
+				FPIESessionLog& SLog = FPIESessionLog::Get();
+				D.Summary.SessionDir = SLog.GetLastDir();
+				const TSharedPtr<FJsonObject> ES = SLog.BuildErrorSummary(ELogVerbosity::Warning);
+				if (ES.IsValid())
+				{
+					int32 EC = 0, WC = 0;
+					ES->TryGetNumberField(TEXT("error_count"), EC);
+					ES->TryGetNumberField(TEXT("warning_count"), WC);
+					D.Summary.ErrorsDuringRun = EC;
+					D.Summary.WarningsDuringRun = WC;
+					const TArray<TSharedPtr<FJsonValue>>* Issues = nullptr;
+					if (ES->TryGetArrayField(TEXT("issues"), Issues) && Issues && Issues->Num() > 0)
+					{
+						const TSharedPtr<FJsonObject>& I0 = (*Issues)[0]->AsObject();
+						if (I0.IsValid())
+						{
+							I0->TryGetStringField(TEXT("message"), D.Summary.TopError);
+							double FF = 0;
+							I0->TryGetNumberField(TEXT("first_frame"), FF);
+							D.Summary.TopErrorFrame = static_cast<uint64>(FF);
+						}
+					}
+				}
+			}
+
 			FString Err;
 			if (SaveDrift(CurrentDriftPath, D, Err))
 			{
@@ -808,6 +946,7 @@ namespace UEMCPPIE
 		}
 
 		RepossessPlayer();
+		RestoreFixedTimestep();
 
 		if (ViewportCapture.IsValid())
 		{
@@ -820,29 +959,52 @@ namespace UEMCPPIE
 		if (!CaptureDir.IsEmpty() && FramesCaptured > 0)
 		{
 			TArray<FString> Frames;
-			IFileManager::Get().FindFiles(Frames, *(CaptureDir / TEXT("frame_*.png")), true, false);
+			IFileManager::Get().FindFiles(Frames, *(CaptureDir / TEXT("frame_*.jpg")), true, false);
 			Frames.Sort();
 			for (FString& F : Frames) { F = CaptureDir / F; }
 
 			if (Frames.Num() > 0)
 			{
+				R.FrameDir = CaptureDir;
+				R.FrameCount = Frames.Num();
+
 				const FString RecordingDir = FPaths::GetPath(CaptureDir);
 				const FString CapturesDir = RecordingDir / TEXT("captures");
 				IFileManager::Get().MakeDirectory(*CapturesDir, true);
-				const FString GifName = FString::Printf(TEXT("replay_%s.gif"),
-					*FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")));
-				const FString GifPath = CapturesDir / GifName;
-				FGifEncodeParams GP;
-				GP.DelayCs = 3;
-				GP.MaxWidth = 720;
-				if (EncodeAnimatedGif(Frames, GifPath, GP))
+				const FString Stamp = FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S"));
+
+				// Always compose a labeled contact sheet: one JPEG the agent can
+				// read at a glance. Labels carry the frame index so a divergence
+				// frame can be located visually. Frames are KEPT on disk (unlike
+				// the old pipeline, which deleted them after GIF encoding).
+				TArray<FString> Labels;
+				Labels.Reserve(Frames.Num());
+				for (int32 i = 0; i < Frames.Num(); ++i)
 				{
-					R.GifPath = GifPath;
-					for (const FString& F : Frames)
+					Labels.Add(FString::Printf(TEXT("F%d"), i));
+				}
+				const FString SheetPath = CapturesDir / FString::Printf(TEXT("contact_%s.jpg"), *Stamp);
+				FContactSheetParams CP;
+				CP.CellWidth = 300;
+				CP.MaxCells = 25;
+				if (ComposeContactSheet(Frames, SheetPath, CP, &Labels))
+				{
+					R.ContactSheetPath = SheetPath;
+				}
+
+				// GIF is now opt-in (capture_frame_every gives frames; encode_gif
+				// asks for the animation on top). A vision model cannot parse GIF
+				// animation, so it is off by default.
+				if (Pending.bEncodeGif)
+				{
+					const FString GifPath = CapturesDir / FString::Printf(TEXT("replay_%s.gif"), *Stamp);
+					FGifEncodeParams GP;
+					GP.DelayCs = 3;
+					GP.MaxWidth = 720;
+					if (EncodeAnimatedGif(Frames, GifPath, GP))
 					{
-						IFileManager::Get().Delete(*F);
+						R.GifPath = GifPath;
 					}
-					IFileManager::Get().DeleteDirectory(*CaptureDir, false, false);
 				}
 			}
 		}
@@ -891,6 +1053,9 @@ namespace UEMCPPIE
 			S.LastMaxPositionDriftCm = LastFinish.Drift.MaxPositionDriftCm;
 			S.LastMaxVelocityDriftCms = LastFinish.Drift.MaxVelocityDriftCms;
 			S.LastFramesCompared = LastFinish.Drift.FramesCompared;
+			S.LastFrameDir = LastFinish.FrameDir;
+			S.LastFrameCount = LastFinish.FrameCount;
+			S.LastContactSheetPath = LastFinish.ContactSheetPath;
 		}
 		return S;
 	}

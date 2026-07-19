@@ -124,6 +124,8 @@ nativeModule:
         time_scale:          { type: number,  description: "Playback speed multiplier (default 1)" }
         mode:                { type: string,  description: "replay | monitor (default replay)" }
         capture_frame_every: { type: number,  description: "Capture a viewport frame every N steps" }
+        encode_gif:          { type: boolean, description: "Also encode an animated GIF from captured frames (default false; frames + contact sheet are the useful artifacts)" }
+        fixed_timestep:      { type: boolean, description: "Drive the engine at a fixed 1/pin_fps delta during replay for stronger reproducibility (default false; not full determinism)" }
         client_id:           { type: number }
         drift_thresholds:    { type: object,  description: "position_cm / rotation_deg / velocity_cms / tracked overrides" }
     replay_run:
@@ -143,15 +145,55 @@ nativeModule:
         eject:               { type: boolean, description: "Eject to spectator during replay" }
         time_scale:          { type: number,  description: "Playback speed multiplier (default 1)" }
         mode:                { type: string,  description: "replay | monitor (default replay)" }
-        capture_frame_every: { type: number,  description: "Capture a viewport frame every N steps (encodes a GIF on finish)" }
+        capture_frame_every: { type: number,  description: "Capture a viewport frame every N steps (keeps JPEG frames + builds a contact sheet)" }
+        encode_gif:          { type: boolean, description: "Also encode an animated GIF on finish (default false)" }
+        fixed_timestep:      { type: boolean, description: "Fixed 1/pin_fps timestep during replay for stronger reproducibility (default false)" }
         client_id:           { type: number }
         drift_thresholds:    { type: object,  description: "position_cm / rotation_deg / velocity_cms / tracked overrides" }
+    replay_analyze:
+      description: "Read a finalised drift.json and return the synthesised lead: first divergence (frame, channel, source vs replay value), top channels, errors logged during the run, and the images bracketing the divergence. Read this instead of the drift CSV."
+      schema:
+        recording_id:  { type: string, description: "Source recording id" }
+        recording_dir: { type: string, description: "Recording folder (used directly when no id is given)" }
+    replay_state:
+      description: "Deterministic state replay: return the exact recorded pawn transform at a time/frame (scrub/snapshot), interpolated. Zero drift (nothing is simulated). Optionally apply the recorded pose to the live PIE pawn."
+      schema:
+        recording_id:  { type: string,  description: "Source recording id" }
+        recording_dir: { type: string,  description: "Recording folder (used directly when no id is given)" }
+        at_time:       { type: number,  description: "Seconds to sample (interpolated). Omit for the last frame" }
+        at_frame:      { type: number,  description: "Frame index to sample (alternative to at_time)" }
+        apply:         { type: boolean, description: "Teleport the live PIE pawn to the recorded pose (default false)" }
     replay_disarm:
       description: "Cancel an armed replay"
     replay_stop:
       description: "Stop in-flight replay"
     replay_status:
       description: "Replayer state poll"
+
+    # ── Reproduction tests ────────────────────────────────────────
+    test_scaffold:
+      description: "Turn a recording into a durable, self-verifying test.json: assertions on max drift + max errors. Run it with test_run."
+      schema:
+        recording_id:           { type: string, description: "Source recording id" }
+        recording_dir:          { type: string, description: "Recording folder (used directly when no id is given)" }
+        name:                   { type: string, description: "Test name (default repro)" }
+        max_position_drift_cm:  { type: number, description: "Assertion: max allowed position drift (default 10)" }
+        max_velocity_drift_cms: { type: number, description: "Assertion: max allowed velocity drift (default 50)" }
+        max_rotation_drift_deg: { type: number, description: "Assertion: max allowed rotation drift (default 5)" }
+        max_errors:             { type: number, description: "Assertion: max errors logged during the run (default 0)" }
+    test_run:
+      description: "Run a scaffolded reproduction test: replays the recording (auto_run) then checks the finalised drift.json + error count against the assertions. Returns passed + failures + artifacts."
+      schema:
+        test_path:     { type: string,  description: "Explicit test.json path" }
+        recording_id:  { type: string,  description: "Recording id (with name) to locate the test" }
+        recording_dir: { type: string,  description: "Recording folder to locate the test" }
+        name:          { type: string,  description: "Test name (default repro)" }
+        auto_run:      { type: boolean, description: "Drive the replay if no drift.json exists yet (default true)" }
+    test_list:
+      description: "List scaffolded reproduction tests (all recordings, or one when recording_id/dir is given)."
+      schema:
+        recording_id:  { type: string }
+        recording_dir: { type: string }
 
     # ── Offline diff ──────────────────────────────────────────────
     record_diff:
@@ -238,13 +280,17 @@ nativeModule:
         output_dir: { type: string }
         limit:      { type: number, description: "Max rows (default 200)" }
     observe_read:
-      description: "Read an observation run artifact"
+      description: "Read an observation run artifact. file=series returns per-channel time series (min/max/first/last, first_frame_over a threshold) instead of raw rows."
       schema:
-        run_id:     { type: string, description: "Observation run id (required)" }
-        output_dir: { type: string }
-        file:       { type: string, description: "manifest | csv | tracked (default manifest)" }
-        limit:      { type: number, description: "csv/tracked: max rows (default 1000)" }
-        offset:     { type: number }
+        run_id:         { type: string,  description: "Observation run id (required)" }
+        output_dir:     { type: string }
+        file:           { type: string,  description: "manifest | csv | tracked | series (default manifest)" }
+        limit:          { type: number,  description: "csv/tracked: max rows (default 1000)" }
+        offset:         { type: number }
+        channels:       { type: string,  description: "series: comma-separated column names (default: all t:* + speed2d + gpu_ms/game_ms)" }
+        threshold:      { type: number,  description: "series: report the first frame where |value| exceeds this" }
+        include_values: { type: boolean, description: "series: include the (downsampled) value array (default false)" }
+        max_points:     { type: number,  description: "series: cap on values returned per channel (default 500)" }
 
     # ── Live PIE introspection ────────────────────────────────────
     anim_state:
@@ -262,6 +308,50 @@ nativeModule:
         subsystemClass: { type: string, description: "Subsystem class short name or path (required)" }
         scope:          { type: string, description: "game | engine | world | localplayer (default game)" }
         propertyNames:  { type: array,  description: "Specific property names (default: all)" }
+
+    # ── Session log / errors ──────────────────────────────────────
+    session_errors:
+      description: "Deduped errors + warnings captured from the Output Log during a PIE session. Call this first after a run to see what errored. Reads the live/most-recent session in memory, or a finished one from disk."
+      schema:
+        session:       { type: string, description: "Session id under Saved/MCPSessions (default: live/most-recent in memory)" }
+        session_dir:   { type: string, description: "Absolute session dir (overrides session)" }
+        min_verbosity: { type: string, description: "error | warning (default warning)" }
+    session_log:
+      description: "Paged raw Output Log lines captured during a PIE session, with filters."
+      schema:
+        session:       { type: string, description: "Session id under Saved/MCPSessions (default: live/most-recent in memory)" }
+        session_dir:   { type: string, description: "Absolute session dir (overrides session)" }
+        min_verbosity: { type: string, description: "error | warning | display | log | verbose (default log)" }
+        category:      { type: string, description: "Exact log category filter (e.g. LogTemp)" }
+        contains:      { type: string, description: "Substring the message must contain" }
+        limit:         { type: number, description: "Max rows (default 200)" }
+        offset:        { type: number, description: "Starting row" }
+
+    # ── Profiling ─────────────────────────────────────────────────
+    perf_summary:
+      description: "Aggregate a recording's per-frame perf into a lead: frametime avg/p50/p99/max, avg game/render/gpu ms, peak memory, and the worst hitches with timestamps."
+      schema:
+        recording_id:  { type: string, description: "Recording id" }
+        recording_dir: { type: string, description: "Recording folder (used directly when no id is given)" }
+    trace_start:
+      description: "Start an Unreal Insights trace to a .utrace file. Returns the path to open in Unreal Insights. Call trace_stop to finish."
+      schema:
+        channels:   { type: string, description: "Comma-separated trace channels (default cpu,frame,bookmark,stats,counters,gpu)" }
+        output_dir: { type: string, description: "Destination dir (default Saved/MCPTraces)" }
+        name:       { type: string, description: "Trace filename (default pie_<timestamp>.utrace)" }
+    trace_stop:
+      description: "Stop the active Unreal Insights trace and report the .utrace path."
+
+    # ── Standalone viewport capture ───────────────────────────────
+    capture:
+      description: "Grab N viewport frames from the live PIE session now (decoupled from replay). Writes JPEGs plus a labeled contact sheet and returns their paths. Use to make observe/inject flows visual."
+      schema:
+        frames:        { type: number, description: "How many frames to grab (default 1)" }
+        every:         { type: number, description: "Grab one frame every N rendered frames (default 1)" }
+        output_dir:    { type: string, description: "Destination dir (default Saved/MCPCaptures/<timestamp>)" }
+        format:        { type: string, description: "jpg | png (default jpg)" }
+        quality:       { type: number, description: "JPEG quality 1-100 (default 80)" }
+        contact_sheet: { type: boolean, description: "Also compose a labeled grid montage (default true)" }
 
 inject: {}
 tasks: {}
