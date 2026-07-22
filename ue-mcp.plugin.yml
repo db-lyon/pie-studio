@@ -172,7 +172,7 @@ nativeModule:
 
     # ── Reproduction tests ────────────────────────────────────────
     test_scaffold:
-      description: "Turn a recording into a durable, self-verifying test.json: assertions on max drift + max errors. Run it with test_run."
+      description: "Turn a recording into a durable, self-verifying test.json: max-drift/error assertions plus an auto-derived predicates block (range invariants per channel, montage-plays events, no-errors). Edit predicates into intent, then run with test_run."
       schema:
         recording_id:           { type: string, description: "Source recording id" }
         recording_dir:          { type: string, description: "Recording folder (used directly when no id is given)" }
@@ -182,13 +182,23 @@ nativeModule:
         max_rotation_drift_deg: { type: number, description: "Assertion: max allowed rotation drift (default 5)" }
         max_errors:             { type: number, description: "Assertion: max errors logged during the run (default 0)" }
     test_run:
-      description: "Run a scaffolded reproduction test: replays the recording (auto_run) then checks the finalised drift.json + error count against the assertions. Returns passed + failures + artifacts."
+      description: "Run a scaffolded reproduction test: replays the recording (auto_run) then checks the finalised drift.json + error count against the assertions AND evaluates the scenario's predicates over the recorded series. Returns passed + failures + a predicates verdict + artifacts."
       schema:
         test_path:     { type: string,  description: "Explicit test.json path" }
         recording_id:  { type: string,  description: "Recording id (with name) to locate the test" }
         recording_dir: { type: string,  description: "Recording folder to locate the test" }
         name:          { type: string,  description: "Test name (default repro)" }
         auto_run:      { type: boolean, description: "Drive the replay if no drift.json exists yet (default true)" }
+    assert_eval:
+      description: "Assertion layer: evaluate predicates over a finalised run's per-frame series (observation.csv/recording.csv) + session_errors.json + markers. Each assertion binds a channel or event to an operator under a temporal quantifier (hold). Returns a verdict with, per assertion, passed + a witness frame/time/value + contact sheet. Writes verdict.json. Predicate schema: {name, channel|event, op(eq|ne|lt|lte|gt|gte|approx|between|changed|increased|decreased|crossed), value|min+max|tol, hold(always|never|eventually|at_end|once_then_always), from_s/from_frame/to_s/to_frame, within_s/within_frames, after_event{marker}, severity(error|warn)}. Channels: series columns (pos_z, speed2d, game_ms), tracked values by path (Boss.Health -> t:Boss.Health), pseudo-channels $errors/$warnings/$frame/$time. Events: montage{montage,phase}, marker{marker}, error{category,contains}."
+      schema:
+        run_id:        { type: string, description: "Observation run id (resolves observation.csv under output_dir)" }
+        output_dir:    { type: string, description: "Observation root (default Saved/MCPObservations)" }
+        recording_dir: { type: string, description: "Recording/replay folder (resolves recording.csv)" }
+        recording_id:  { type: string, description: "Recording id under Saved/MCPRecordings" }
+        csv_path:      { type: string, description: "Explicit per-frame series CSV (overrides run resolution)" }
+        assertions:    { type: array,  description: "Predicate objects to evaluate (see description). Omit to use test_path's predicates." }
+        test_path:     { type: string, description: "Scenario json to read the predicates block from, when assertions is omitted" }
     test_list:
       description: "List scaffolded reproduction tests (all recordings, or one when recording_id/dir is given)."
       schema:
@@ -217,6 +227,45 @@ nativeModule:
         recording_id:       { type: string,  description: "Store under this recording's snapshots/ dir" }
         recording_dir:      { type: string }
         name:               { type: string,  description: "Snapshot filename (default: timestamp)" }
+
+    # ── Actor puppeteering (Arrange: write the live world) ─────────
+    actor_spawn:
+      description: "Spawn an actor in the live PIE world so an agent can Arrange a scenario. Returns a stable id (usable as target for actor_set/call/destroy and snapshot)."
+      schema:
+        class:    { type: string, description: "Class path: native class or blueprint '/Game/.../BP_X.BP_X_C' (required)" }
+        at:       { type: array,  description: "World location [x,y,z] (default origin)" }
+        rotation: { type: array,  description: "Rotation [pitch,yaw,roll] (default 0)" }
+        scale:    { type: array,  description: "Scale [x,y,z] (default 1)" }
+    actor_destroy:
+      description: "Destroy a live PIE actor by id."
+      schema:
+        target: { type: string, description: "Actor id (required)" }
+    actor_set:
+      description: "Set a UProperty on a live PIE actor by dotted path (Component.Struct.Property), coerced from the JSON value. This is the write half of snapshot's reflection read."
+      schema:
+        target: { type: string, description: "Actor id (required)" }
+        path:   { type: string, description: "Dotted property path, e.g. Health or Movement.MaxWalkSpeed (required)" }
+        value:  { description: "Value to write (number, bool, string, or enum name); coerced via ImportText (required)" }
+    actor_call:
+      description: "Invoke a callable UFUNCTION on a live PIE actor, importing args positionally into its parameters."
+      schema:
+        target: { type: string, description: "Actor id (required)" }
+        func:   { type: string, description: "Function name (required)" }
+        args:   { type: array,  description: "Positional arguments, coerced into the function's parameters" }
+
+    # ── Declarative scenario (the committed Arrange/Act/Assert unit) ─
+    scenario_scaffold:
+      description: "Generate a declarative scenario.json (arrange/act/assert) from a recording: empty arrange, a replay act step, and starter assert predicates derived from the series. Edit into intent, then scenario_validate. The reusable, git-committable test unit."
+      schema:
+        recording_id:  { type: string, description: "Source recording id" }
+        recording_dir: { type: string, description: "Recording/observation folder (used directly when no id is given)" }
+        name:          { type: string, description: "Scenario name (default scenario)" }
+        max_errors:    { type: number, description: "no-errors predicate threshold (default 0)" }
+    scenario_validate:
+      description: "Validate a scenario's structure and predicates without running it: known arrange/act step kinds, required per-kind fields, and every assert entry parsing as a valid predicate. Returns valid + per-problem errors + step counts."
+      schema:
+        scenario_path: { type: string, description: "Path to a scenario.json" }
+        scenario:      { type: object, description: "Inline scenario object (alternative to scenario_path)" }
 
     # ── Observation profiles ──────────────────────────────────────
     profile_create:

@@ -8,6 +8,7 @@
 #include "HandlerUtils.h"
 #include "PIE/PIESequenceFormat.h"
 #include "PIE/PIEInputReplayer.h"
+#include "PIE/PIEPredicateEvaluator.h"
 #include "Editor.h"
 #include "Editor/EditorEngine.h"
 #include "Misc/FileHelper.h"
@@ -38,6 +39,33 @@ namespace
 		if (!FJsonSerializer::Deserialize(R, Obj) || !Obj.IsValid()) return nullptr;
 		return Obj;
 	}
+
+	// The most recent contact sheet in <RunDir>/captures, if any.
+	FString FindContactSheet(const FString& RunDir)
+	{
+		const FString CapturesDir = RunDir / TEXT("captures");
+		TArray<FString> Sheets;
+		IFileManager::Get().FindFiles(Sheets, *(CapturesDir / TEXT("contact_*.jpg")), true, false);
+		if (Sheets.Num() == 0) return FString();
+		Sheets.Sort();
+		return CapturesDir / Sheets.Last();
+	}
+
+	// Resolve the per-frame series CSV for a run directory: observation.csv (observe
+	// runs) preferred, else recording.csv (record/replay runs).
+	FString ResolveSeriesCsv(const FString& RunDir)
+	{
+		const FString Obs = RunDir / TEXT("observation.csv");
+		if (FPaths::FileExists(Obs)) return Obs;
+		return RunDir / TEXT("recording.csv");
+	}
+
+	// Auto-derive a starter predicate set from a recording's series. Delegates to the
+	// shared evaluator helper so scenario_scaffold and test_scaffold stay in sync.
+	TArray<TSharedPtr<FJsonValue>> DerivePredicates(const FString& CsvPath, int32 MaxErrors)
+	{
+		return UEMCPPIE::FPIEPredicateEvaluator::DeriveStarterPredicates(CsvPath, MaxErrors);
+	}
 }
 
 TSharedPtr<FJsonValue> FGameplayHandlers::PieTestScaffold(const TSharedPtr<FJsonObject>& Params)
@@ -65,6 +93,11 @@ TSharedPtr<FJsonValue> FGameplayHandlers::PieTestScaffold(const TSharedPtr<FJson
 	Scenario->SetStringField(TEXT("source_recording_dir"), Folder);
 	Scenario->SetStringField(TEXT("drive"), TEXT("replay"));
 	Scenario->SetObjectField(TEXT("assertions"), Asserts);
+
+	// Roadmap v2 Phase A: seed a predicate set derived from the recorded series so
+	// the scaffold asserts intent (ranges, montages, no errors), not just drift.
+	const int32 MaxErrorsInt = static_cast<int32>(OptionalNumber(Params, TEXT("max_errors"), 0.0));
+	Scenario->SetArrayField(TEXT("predicates"), DerivePredicates(ResolveSeriesCsv(Folder), MaxErrorsInt));
 
 	const FString TestsDir = Folder / TEXT("tests");
 	IFileManager::Get().MakeDirectory(*TestsDir, true);
@@ -217,10 +250,9 @@ TSharedPtr<FJsonValue> FGameplayHandlers::PieTestRun(const TSharedPtr<FJsonObjec
 	Check(D.Summary.ErrorsDuringRun <= MaxErrors,
 		FString::Printf(TEXT("%d errors logged > %d allowed"), D.Summary.ErrorsDuringRun, MaxErrors));
 
-	const bool bPassed = Failures.Num() == 0;
+	bool bPassed = Failures.Num() == 0;
 
 	auto Result = MCPSuccess();
-	Result->SetBoolField(TEXT("passed"), bPassed);
 	Result->SetStringField(TEXT("test_path"), TestPath);
 	Result->SetStringField(TEXT("drift_report_path"), DriftPath);
 	Result->SetArrayField(TEXT("failures"), Failures);
@@ -228,11 +260,128 @@ TSharedPtr<FJsonValue> FGameplayHandlers::PieTestRun(const TSharedPtr<FJsonObjec
 	Result->SetNumberField(TEXT("max_velocity_drift_cms"), D.MaxVelocityDriftCms);
 	Result->SetNumberField(TEXT("errors_during_run"), D.Summary.ErrorsDuringRun);
 
+	// Roadmap v2 Phase A: evaluate the scenario's predicates against the recorded
+	// series and merge their verdict with the drift asserts.
+	const TArray<TSharedPtr<FJsonValue>>* PredArr = nullptr;
+	if (Scenario->TryGetArrayField(TEXT("predicates"), PredArr) && PredArr && PredArr->Num() > 0)
+	{
+		TArray<UEMCPPIE::FPredicate> Preds;
+		FString PErr;
+		if (!UEMCPPIE::FPIEPredicateEvaluator::ParsePredicates(*PredArr, Preds, PErr))
+		{
+			return MCPError(FString::Printf(TEXT("predicate parse error: %s"), *PErr));
+		}
+		TArray<UEMCPPIE::FPredicateResult> PResults;
+		if (UEMCPPIE::FPIEPredicateEvaluator::Evaluate(
+				ResolveSeriesCsv(Source), Source / TEXT("session_errors.json"),
+				Source / TEXT("manifest.json"), Preds, PResults, PErr))
+		{
+			bool bPredPassed = true;
+			TSharedRef<FJsonObject> PBlock = UEMCPPIE::FPIEPredicateEvaluator::ResultsToJson(PResults, bPredPassed);
+			Result->SetObjectField(TEXT("predicates"), PBlock);
+			bPassed = bPassed && bPredPassed;
+		}
+		else
+		{
+			Result->SetStringField(TEXT("predicates_error"), PErr);
+		}
+	}
+
+	Result->SetBoolField(TEXT("passed"), bPassed);
+
 	// Surface the contact sheet for a visual check when present.
-	const FString CapturesDir = Source / TEXT("captures");
-	TArray<FString> Sheets;
-	IFileManager::Get().FindFiles(Sheets, *(CapturesDir / TEXT("contact_*.jpg")), true, false);
-	if (Sheets.Num() > 0) { Sheets.Sort(); Result->SetStringField(TEXT("contact_sheet_path"), CapturesDir / Sheets.Last()); }
+	const FString Sheet = FindContactSheet(Source);
+	if (!Sheet.IsEmpty()) Result->SetStringField(TEXT("contact_sheet_path"), Sheet);
 
 	return MCPResult(Result);
+}
+
+TSharedPtr<FJsonValue> FGameplayHandlers::PieAssertEval(const TSharedPtr<FJsonObject>& Params)
+{
+	MCP_CHECK_GAME_THREAD();
+
+	// Resolve the run directory: an observation run (run_id under output_dir), a
+	// recording dir, or an explicit csv_path.
+	FString CsvPath = OptionalString(Params, TEXT("csv_path"));
+	FString RunDir;
+	if (CsvPath.IsEmpty())
+	{
+		const FString RunId = OptionalString(Params, TEXT("run_id"));
+		if (!RunId.IsEmpty())
+		{
+			const FString Root = OptionalString(Params, TEXT("output_dir"),
+				FPaths::ProjectSavedDir() / TEXT("MCPObservations"));
+			RunDir = Root / RunId;
+		}
+		else
+		{
+			RunDir = ResolveRecordingFolder(OptionalString(Params, TEXT("recording_id")),
+				OptionalString(Params, TEXT("recording_dir")));
+		}
+		if (RunDir.IsEmpty())
+		{
+			return MCPError(TEXT("assert_eval needs run_id (+output_dir), recording_dir/recording_id, or csv_path"));
+		}
+		CsvPath = ResolveSeriesCsv(RunDir);
+	}
+	else
+	{
+		RunDir = FPaths::GetPath(CsvPath);
+	}
+
+	if (!FPaths::FileExists(CsvPath))
+	{
+		return MCPError(FString::Printf(TEXT("series CSV not found: %s"), *CsvPath));
+	}
+
+	// Assertions: inline array, or the predicates block of a saved scenario.
+	const TArray<TSharedPtr<FJsonValue>>* AArr = nullptr;
+	TArray<TSharedPtr<FJsonValue>> FromTest;
+	if (!Params->TryGetArrayField(TEXT("assertions"), AArr) || !AArr)
+	{
+		const FString TestPath = OptionalString(Params, TEXT("test_path"));
+		if (!TestPath.IsEmpty())
+		{
+			TSharedPtr<FJsonObject> Scenario = LoadJson(TestPath);
+			const TArray<TSharedPtr<FJsonValue>>* PArr = nullptr;
+			if (Scenario.IsValid() && Scenario->TryGetArrayField(TEXT("predicates"), PArr) && PArr)
+			{
+				FromTest = *PArr;
+				AArr = &FromTest;
+			}
+		}
+	}
+	if (!AArr || AArr->Num() == 0)
+	{
+		return MCPError(TEXT("assert_eval needs a non-empty 'assertions' array or a 'test_path' with predicates"));
+	}
+
+	TArray<UEMCPPIE::FPredicate> Preds;
+	FString Err;
+	if (!UEMCPPIE::FPIEPredicateEvaluator::ParsePredicates(*AArr, Preds, Err))
+	{
+		return MCPError(FString::Printf(TEXT("predicate parse error: %s"), *Err));
+	}
+
+	TArray<UEMCPPIE::FPredicateResult> Results;
+	if (!UEMCPPIE::FPIEPredicateEvaluator::Evaluate(
+			CsvPath, RunDir / TEXT("session_errors.json"), RunDir / TEXT("manifest.json"),
+			Preds, Results, Err))
+	{
+		return MCPError(FString::Printf(TEXT("evaluate failed: %s"), *Err));
+	}
+
+	bool bPassed = true;
+	TSharedRef<FJsonObject> Verdict = UEMCPPIE::FPIEPredicateEvaluator::ResultsToJson(Results, bPassed);
+	Verdict->SetStringField(TEXT("csv_path"), CsvPath);
+	const FString Sheet = FindContactSheet(RunDir);
+	if (!Sheet.IsEmpty()) Verdict->SetStringField(TEXT("contact_sheet_path"), Sheet);
+
+	// Persist the verdict next to the run for later inspection.
+	FString Out;
+	TSharedRef<TJsonWriter<>> W = TJsonWriterFactory<>::Create(&Out);
+	FJsonSerializer::Serialize(Verdict, W);
+	FFileHelper::SaveStringToFile(Out, *(RunDir / TEXT("verdict.json")));
+
+	return MCPResult(Verdict);
 }

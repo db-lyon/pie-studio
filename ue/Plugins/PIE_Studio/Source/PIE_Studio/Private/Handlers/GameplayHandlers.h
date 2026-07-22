@@ -29,6 +29,19 @@ public:
 	static TSharedPtr<FJsonValue> PieTestRun(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> PieTestList(const TSharedPtr<FJsonObject>& Params);
 
+	// Assertion layer (Roadmap v2, Phase A)
+	static TSharedPtr<FJsonValue> PieAssertEval(const TSharedPtr<FJsonObject>& Params);
+
+	// Actor puppeteering (Roadmap v2, F1)
+	static TSharedPtr<FJsonValue> PieActorSpawn(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieActorDestroy(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieActorSet(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieActorCall(const TSharedPtr<FJsonObject>& Params);
+
+	// Declarative scenario (Roadmap v2, F2)
+	static TSharedPtr<FJsonValue> PieScenarioScaffold(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieScenarioValidate(const TSharedPtr<FJsonObject>& Params);
+
 	// Input injection
 	static TSharedPtr<FJsonValue> InjectInput(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> InjectInputStart(const TSharedPtr<FJsonObject>& Params);
