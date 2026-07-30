@@ -77,6 +77,45 @@ bool FPIEScenarioTest::RunTest(const FString& /*Parameters*/)
 		TestTrue(FString::Printf(TEXT("multiple problems reported (%d)"), Errors.Num()), Errors.Num() >= 4);
 	}
 
+	// #3: a timed gameplay call as an ACT step. arrange's 'call' fires once
+	// during setup; this is the stimulus half of a validation run, so it needs
+	// the same per-kind checks - a mistyped target in a timed step otherwise
+	// fails by silently never firing.
+	{
+		const FString Json = TEXT("{")
+			TEXT("\"name\":\"climb-traversal\",")
+			TEXT("\"arrange\":[{\"kind\":\"spawn\",\"class\":\"/Game/BP_Char.BP_Char_C\"}],")
+			TEXT("\"act\":[")
+			TEXT("{\"kind\":\"call\",\"at_seconds\":0.0,\"target\":\"char\",\"component\":\"AC_Climb\",\"func\":\"SetClimbMoveInput\",\"args\":[-1]},")
+			TEXT("{\"kind\":\"call\",\"at_seconds\":0.8,\"target\":\"char\",\"component\":\"AC_Climb\",\"func\":\"StopClimb\"}")
+			TEXT("],")
+			TEXT("\"assert\":[{\"name\":\"floor\",\"channel\":\"pos_z\",\"op\":\"gte\",\"value\":-50,\"hold\":\"always\"}]")
+			TEXT("}");
+		FScenario S; FString Err;
+		TestTrue(TEXT("timed-call scenario parses"), FPIEScenario::Parse(FromString(Json), S, Err));
+		TestEqual(TEXT("act count"), S.Act.Num(), 2);
+		TArray<FString> Errors;
+		TestTrue(FString::Printf(TEXT("timed-call scenario valid (%d errors)"), Errors.Num()),
+			FPIEScenario::Validate(S, Errors));
+	}
+
+	// A call act step missing target/func must be rejected, not accepted as a
+	// merely "known kind" the way act steps used to be.
+	{
+		const FString Json = TEXT("{")
+			TEXT("\"name\":\"bad-call\",")
+			TEXT("\"arrange\":[],")
+			TEXT("\"act\":[{\"kind\":\"call\",\"at_seconds\":-1}],")
+			TEXT("\"assert\":[{\"name\":\"floor\",\"channel\":\"pos_z\",\"op\":\"gte\",\"value\":-50,\"hold\":\"always\"}]")
+			TEXT("}");
+		FScenario S; FString Err;
+		TestTrue(TEXT("parse ok"), FPIEScenario::Parse(FromString(Json), S, Err));
+		TArray<FString> Errors;
+		TestFalse(TEXT("invalid"), FPIEScenario::Validate(S, Errors));
+		// target, func and the negative at_seconds.
+		TestTrue(FString::Printf(TEXT("call problems reported (%d)"), Errors.Num()), Errors.Num() >= 3);
+	}
+
 	return true;
 }
 

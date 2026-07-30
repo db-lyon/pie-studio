@@ -88,16 +88,33 @@ namespace UEMCPPIE
 			}
 		}
 
-		// Act steps: known kind is enough at this layer.
-		static const TSet<FString> KnownAct = { TEXT("replay"), TEXT("inject_tape"), TEXT("drive"), TEXT("goto"), TEXT("face"), TEXT("follow") };
+		// Act steps. 'call' is validated per-kind like arrange's, because a
+		// mistyped target or func in a timed step fails by silently never
+		// firing - the worst failure mode a driver can have (#3).
+		static const TSet<FString> KnownAct = { TEXT("replay"), TEXT("inject_tape"), TEXT("drive"), TEXT("goto"), TEXT("face"), TEXT("follow"), TEXT("call") };
 		for (int32 i = 0; i < S.Act.Num(); ++i)
 		{
 			TSharedPtr<FJsonObject> O;
 			if (!StepObject(S.Act[i], O)) { OutErrors.Add(FString::Printf(TEXT("act[%d] is not an object"), i)); continue; }
 			FString Kind;
 			O->TryGetStringField(TEXT("kind"), Kind);
-			if (!KnownAct.Contains(Kind.ToLower()))
+			Kind = Kind.ToLower();
+			if (!KnownAct.Contains(Kind))
+			{
 				OutErrors.Add(FString::Printf(TEXT("act[%d] unknown kind '%s'"), i, *Kind));
+				continue;
+			}
+			if (Kind == TEXT("call"))
+			{
+				FString Tgt, Func;
+				if (!O->TryGetStringField(TEXT("target"), Tgt) || Tgt.IsEmpty())
+					OutErrors.Add(FString::Printf(TEXT("act[%d] call needs 'target'"), i));
+				if (!O->TryGetStringField(TEXT("func"), Func) || Func.IsEmpty())
+					OutErrors.Add(FString::Printf(TEXT("act[%d] call needs 'func'"), i));
+				double At = 0.0;
+				if (O->TryGetNumberField(TEXT("at_seconds"), At) && At < 0.0)
+					OutErrors.Add(FString::Printf(TEXT("act[%d] call 'at_seconds' cannot be negative"), i));
+			}
 		}
 
 		// Assert: must parse as predicates.

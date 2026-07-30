@@ -262,7 +262,7 @@ nativeModule:
         name:          { type: string, description: "Scenario name (default scenario)" }
         max_errors:    { type: number, description: "no-errors predicate threshold (default 0)" }
     scenario_validate:
-      description: "Validate a scenario's structure and predicates without running it: known arrange/act step kinds, required per-kind fields, and every assert entry parsing as a valid predicate. Returns valid + per-problem errors + step counts."
+      description: "Validate a scenario's structure and predicates without running it: known arrange/act step kinds, required per-kind fields, and every assert entry parsing as a valid predicate. Returns valid + per-problem errors + step counts. Act supports replay | inject_tape | drive | goto | face | follow | call; a 'call' act step is a TIMED gameplay UFUNCTION ({at_seconds, target, component?, func, args?}) and is checked for target/func like arrange's, because a mistyped timed step otherwise fails by silently never firing."
       schema:
         scenario_path: { type: string, description: "Path to a scenario.json" }
         scenario:      { type: object, description: "Inline scenario object (alternative to scenario_path)" }
