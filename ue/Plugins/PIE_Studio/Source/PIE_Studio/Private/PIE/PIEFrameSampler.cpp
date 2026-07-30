@@ -132,6 +132,52 @@ namespace UEMCPPIE
 			return false;
 		}
 
+		// pie-studio#4 (ue-mcp#756): sample one channel of a named bone or socket
+		// transform per frame. ue-mcp's read_bone_transforms is a point-in-time
+		// read by design; a bounded frame range with timestamps is observation,
+		// so it belongs on this side of the boundary, and the tracked-value CSV
+		// already carries the timestamps.
+		//
+		// Spec: "bone:<BoneOrSocket>.<channel>"   world space
+		//       "bonecs:<BoneOrSocket>.<channel>" component space
+		// Channel: x|y|z, pitch|yaw|roll, scalex|scaley|scalez.
+		bool ResolveBoneChannel(APawn* Pawn, const FString& Spec, bool bComponentSpace, double& OutValue)
+		{
+			FString BoneName, Channel;
+			// Split on the LAST dot: socket names may legitimately contain dots,
+			// and the channel never does.
+			if (!Spec.Split(TEXT("."), &BoneName, &Channel, ESearchCase::CaseSensitive, ESearchDir::FromEnd))
+			{
+				return false;
+			}
+			BoneName.TrimStartAndEndInline();
+			Channel = Channel.TrimStartAndEnd().ToLower();
+			if (!Pawn || BoneName.IsEmpty() || Channel.IsEmpty()) return false;
+
+			USkeletalMeshComponent* Mesh = Pawn->FindComponentByClass<USkeletalMeshComponent>();
+			if (!Mesh) return false;
+			const FName Bone(*BoneName);
+			// DoesSocketExist covers sockets; GetBoneIndex covers raw bones.
+			if (!Mesh->DoesSocketExist(Bone) && Mesh->GetBoneIndex(Bone) == INDEX_NONE) return false;
+
+			const FTransform T = Mesh->GetSocketTransform(
+				Bone, bComponentSpace ? RTS_Component : RTS_World);
+			const FVector Loc = T.GetLocation();
+			const FRotator Rot = T.Rotator();
+			const FVector Scale = T.GetScale3D();
+
+			if (Channel == TEXT("x"))      { OutValue = Loc.X;    return true; }
+			if (Channel == TEXT("y"))      { OutValue = Loc.Y;    return true; }
+			if (Channel == TEXT("z"))      { OutValue = Loc.Z;    return true; }
+			if (Channel == TEXT("pitch"))  { OutValue = Rot.Pitch; return true; }
+			if (Channel == TEXT("yaw"))    { OutValue = Rot.Yaw;   return true; }
+			if (Channel == TEXT("roll"))   { OutValue = Rot.Roll;  return true; }
+			if (Channel == TEXT("scalex")) { OutValue = Scale.X;  return true; }
+			if (Channel == TEXT("scaley")) { OutValue = Scale.Y;  return true; }
+			if (Channel == TEXT("scalez")) { OutValue = Scale.Z;  return true; }
+			return false;
+		}
+
 		// Resolve a subsystem in the PIE world by short (or "U"-prefixed) class
 		// name, so tracked paths of the form "sub:MyGameSubsystem.Phase" can be
 		// sampled per frame (item 2b).
@@ -438,6 +484,20 @@ namespace UEMCPPIE
 							Row.TrackedValues.Add(S.Path, Val);
 						}
 					}
+				}
+			}
+			else if (S.Path.StartsWith(TEXT("bone:")))
+			{
+				if (ResolveBoneChannel(Pawn, S.Path.RightChop(5), /*bComponentSpace=*/false, Val))
+				{
+					Row.TrackedValues.Add(S.Path, Val);
+				}
+			}
+			else if (S.Path.StartsWith(TEXT("bonecs:")))
+			{
+				if (ResolveBoneChannel(Pawn, S.Path.RightChop(7), /*bComponentSpace=*/true, Val))
+				{
+					Row.TrackedValues.Add(S.Path, Val);
 				}
 			}
 			else if (ResolvePathToDouble(Pawn, S.Path, Val))

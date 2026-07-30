@@ -46,9 +46,17 @@ not just input-deterministic ones.
 ## Recording
 
 `record_arm` configures what to capture: input actions, pawn state, tracked
-reflection paths, actor positions, and (new) subsystem values via `sub:<Class>.<path>`
-tracked entries. Per-frame performance (game/render/gpu ms, memory) is always
+reflection paths, actor positions, subsystem values via `sub:<Class>.<path>`, and
+skeletal bone/socket channels via `bone:<BoneOrSocket>.<channel>` (world) or
+`bonecs:<BoneOrSocket>.<channel>` (component space). Channels are `x|y|z`,
+`pitch|yaw|roll`, `scalex|scaley|scalez`, sampled off the pawn's skeletal mesh.
+Component space is what an animation assertion usually wants: it does not move
+when the actor does. Per-frame performance (game/render/gpu ms, memory) is always
 written to `recording.csv`. Recording starts on BeginPIE and finalises on EndPIE.
+
+A bone entry that names a bone or socket the mesh does not have is simply absent
+from the row rather than sampling zero, so a typo shows up as a missing column
+instead of a flat line that reads like real data.
 
 ## Replay
 
