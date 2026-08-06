@@ -30,16 +30,6 @@ namespace
 		return Folder;
 	}
 
-	TSharedPtr<FJsonObject> LoadJson(const FString& Path)
-	{
-		FString Str;
-		if (!FFileHelper::LoadFileToString(Str, *Path)) return nullptr;
-		TSharedPtr<FJsonObject> Obj;
-		TSharedRef<TJsonReader<>> R = TJsonReaderFactory<>::Create(Str);
-		if (!FJsonSerializer::Deserialize(R, Obj) || !Obj.IsValid()) return nullptr;
-		return Obj;
-	}
-
 	// The most recent contact sheet in <RunDir>/captures, if any.
 	FString FindContactSheet(const FString& RunDir)
 	{
@@ -174,7 +164,7 @@ TSharedPtr<FJsonValue> FGameplayHandlers::PieTestRun(const TSharedPtr<FJsonObjec
 		TestPath = Folder / TEXT("tests") / (Name + TEXT(".json"));
 	}
 
-	TSharedPtr<FJsonObject> Scenario = LoadJson(TestPath);
+	TSharedPtr<FJsonObject> Scenario = LoadJsonFile(TestPath);
 	if (!Scenario.IsValid())
 	{
 		return MCPError(FString::Printf(TEXT("Test scenario not found/parseable: %s"), *TestPath));
@@ -342,7 +332,7 @@ TSharedPtr<FJsonValue> FGameplayHandlers::PieAssertEval(const TSharedPtr<FJsonOb
 		const FString TestPath = OptionalString(Params, TEXT("test_path"));
 		if (!TestPath.IsEmpty())
 		{
-			TSharedPtr<FJsonObject> Scenario = LoadJson(TestPath);
+			TSharedPtr<FJsonObject> Scenario = LoadJsonFile(TestPath);
 			const TArray<TSharedPtr<FJsonValue>>* PArr = nullptr;
 			if (Scenario.IsValid() && Scenario->TryGetArrayField(TEXT("predicates"), PArr) && PArr)
 			{
