@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
+#include "Misc/FileHelper.h"
+#include "Serialization/JsonSerializer.h"
 
 class UWorld;
 class AActor;
@@ -290,5 +292,20 @@ namespace UEMCPPIE
 	inline FString ISOTimestampNow()
 	{
 		return FDateTime::Now().ToString(TEXT("%Y-%m-%dT%H:%M:%S"));
+	}
+
+	// Read a JSON file into an object, or return an unset pointer if the file
+	// is missing or does not parse. Shared rather than copied per handler: the
+	// handler files are compiled as one unity translation unit, so two file
+	// local definitions of the same signature collide at compile time under
+	// some unity groupings and not others.
+	inline TSharedPtr<FJsonObject> LoadJsonFile(const FString& Path)
+	{
+		FString Str;
+		if (!FFileHelper::LoadFileToString(Str, *Path)) return nullptr;
+		TSharedPtr<FJsonObject> Obj;
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Str);
+		if (!FJsonSerializer::Deserialize(Reader, Obj) || !Obj.IsValid()) return nullptr;
+		return Obj;
 	}
 }

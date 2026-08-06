@@ -6,6 +6,7 @@
 #include "HandlerUtils.h"
 #include "PIE/PIEScenario.h"
 #include "PIE/PIEPredicateEvaluator.h"
+#include "PIE/PIESequenceFormat.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "HAL/FileManager.h"
@@ -32,16 +33,6 @@ namespace
 		const FString Obs = Folder / TEXT("observation.csv");
 		if (FPaths::FileExists(Obs)) return Obs;
 		return Folder / TEXT("recording.csv");
-	}
-
-	TSharedPtr<FJsonObject> LoadJson(const FString& Path)
-	{
-		FString Str;
-		if (!FFileHelper::LoadFileToString(Str, *Path)) return nullptr;
-		TSharedPtr<FJsonObject> Obj;
-		TSharedRef<TJsonReader<>> R = TJsonReaderFactory<>::Create(Str);
-		if (!FJsonSerializer::Deserialize(R, Obj) || !Obj.IsValid()) return nullptr;
-		return Obj;
 	}
 
 	TSharedRef<FJsonObject> ValidationBlock(const FScenario& S)
@@ -116,7 +107,7 @@ TSharedPtr<FJsonValue> FGameplayHandlers::PieScenarioValidate(const TSharedPtr<F
 	const FString Path = OptionalString(Params, TEXT("scenario_path"));
 	if (!Path.IsEmpty())
 	{
-		Root = LoadJson(Path);
+		Root = LoadJsonFile(Path);
 		if (!Root.IsValid()) return MCPError(FString::Printf(TEXT("scenario not found/parseable: %s"), *Path));
 	}
 	else
