@@ -61,8 +61,14 @@ namespace UEMCPPIE
 		// function has one (OutReturn is left unset for a void function). Struct returns
 		// come back as JSON objects, so a loop can sample what a call answered rather
 		// than only that it ran.
+		//
+		// OutReturnObject, when supplied, additionally receives the returned UObject for
+		// an object-valued return. JSON renders such a return as a path string, and a
+		// path string is not something a later step can be pointed at, so the object
+		// itself has to survive the call for "use what step 3 produced" to work.
 		static bool CallFunctionWithResult(UObject* Target, const FString& FuncName,
 		                                   const TArray<TSharedPtr<FJsonValue>>& Args,
-		                                   TSharedPtr<FJsonValue>& OutReturn, FString& OutError);
+		                                   TSharedPtr<FJsonValue>& OutReturn, FString& OutError,
+		                                   UObject** OutReturnObject = nullptr);
 	};
 }

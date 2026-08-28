@@ -222,8 +222,10 @@ namespace UEMCPPIE
 
 	bool FPIEActorPuppet::CallFunctionWithResult(UObject* Target, const FString& FuncName,
 	                                             const TArray<TSharedPtr<FJsonValue>>& Args,
-	                                             TSharedPtr<FJsonValue>& OutReturn, FString& OutError)
+	                                             TSharedPtr<FJsonValue>& OutReturn, FString& OutError,
+	                                             UObject** OutReturnObject)
 	{
+		if (OutReturnObject) *OutReturnObject = nullptr;
 		if (!Target) { OutError = TEXT("null target"); return false; }
 		UFunction* Function = Target->FindFunction(FName(*FuncName));
 		if (!Function) { OutError = FString::Printf(TEXT("function '%s' not found on %s"), *FuncName, *Target->GetClass()->GetName()); return false; }
@@ -261,8 +263,15 @@ namespace UEMCPPIE
 			for (TFieldIterator<FProperty> It(Function); It && It->HasAnyPropertyFlags(CPF_Parm); ++It)
 			{
 				if (!It->HasAnyPropertyFlags(CPF_ReturnParm)) continue;
-				OutReturn = FJsonObjectConverter::UPropertyToJsonValue(
-					*It, It->ContainerPtrToValuePtr<void>(Params));
+				void* ReturnPtr = It->ContainerPtrToValuePtr<void>(Params);
+				OutReturn = FJsonObjectConverter::UPropertyToJsonValue(*It, ReturnPtr);
+				if (OutReturnObject)
+				{
+					if (FObjectPropertyBase* OP = CastField<FObjectPropertyBase>(*It))
+					{
+						*OutReturnObject = OP->GetObjectPropertyValue(ReturnPtr);
+					}
+				}
 				break;
 			}
 		}

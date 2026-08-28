@@ -43,20 +43,20 @@ bool FPIEObjectAddressParseTest::RunTest(const FString& /*Parameters*/)
 	// subobject on an actor - the case the older verbs could not name.
 	{
 		FObjectAddress A = FObjectAddress::FromJson(AddressJson(
-			TEXT("{\"target\":{\"actorLabel\":\"Hero\",\"component\":\"CombatComponent\",\"property\":\"CurrentTarget\"}}")));
+			TEXT("{\"target\":{\"actorLabel\":\"Hero\",\"component\":\"CombatComponent\",\"viaProperty\":\"CurrentTarget\"}}")));
 		TestEqual(TEXT("actorLabel alias"), A.Actor, FString(TEXT("Hero")));
 		TestEqual(TEXT("component"), A.Component, FString(TEXT("CombatComponent")));
-		TestEqual(TEXT("property"), A.Property, FString(TEXT("CurrentTarget")));
+		TestEqual(TEXT("viaProperty"), A.Property, FString(TEXT("CurrentTarget")));
 	}
 
 	// The flat form is equivalent, and snake_case spellings are accepted because
 	// the recording verbs use that convention.
 	{
 		FObjectAddress A = FObjectAddress::FromJson(AddressJson(
-			TEXT("{\"actor_label\":\"Hero\",\"component_name\":\"Movement\",\"property_path\":\"Owner\"}")));
+			TEXT("{\"actor_label\":\"Hero\",\"component_name\":\"Movement\",\"via_property\":\"Owner\"}")));
 		TestEqual(TEXT("snake actor"), A.Actor, FString(TEXT("Hero")));
 		TestEqual(TEXT("snake component"), A.Component, FString(TEXT("Movement")));
-		TestEqual(TEXT("snake property"), A.Property, FString(TEXT("Owner")));
+		TestEqual(TEXT("snake viaProperty"), A.Property, FString(TEXT("Owner")));
 	}
 
 	// Subsystem addressing, with the scope normalised to lower case.

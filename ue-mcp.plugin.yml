@@ -237,7 +237,7 @@ nativeModule:
         subsystem:               { type: string,  description: "Subject is a running subsystem instead of an actor (class short name or path)" }
         scope:                   { type: string,  description: "Subsystem scope: game | world | localplayer | engine (default: search all)" }
         objectPath:              { type: string,  description: "Subject is the object at this path" }
-        property:                { type: string,  description: "Follow a dotted UPROPERTY path from the subject to the object it points at (e.g. an actor pointer set at run time)" }
+        viaProperty:             { type: string,  description: "Follow a dotted UPROPERTY path from the subject to the object it points at, e.g. an actor pointer set at run time" }
         fields:                  { type: array,   description: "Built-in channels: location | rotation | velocity | speed | grounded | falling | distance_to_ground (default: location, velocity, grounded)" }
         properties:              { type: array,   description: "Dotted property paths sampled each tick. Strings, or {name, path, actor?/subsystem?/component?} to rename or point at another object. Struct leaves come back as objects." }
         getters:                 { type: array,   description: "No-argument UFUNCTIONs invoked each tick, return value recorded. Strings, or {name, func, actor?/subsystem?/component?}. A function that takes arguments is rejected at start." }
@@ -283,6 +283,31 @@ nativeModule:
         target: { type: string, description: "Actor id (required)" }
         func:   { type: string, description: "Function name (required)" }
         args:   { type: array,  description: "Positional arguments, coerced into the function's parameters" }
+
+    # ── Orchestration: one uninterruptible dispatch (#960) ────────
+    run_sequence:
+      description: >-
+        Run an ordered list of steps against the live PIE world inside ONE game-thread dispatch, so
+        nothing else can land between them. Use when a verification only means anything as a whole:
+        create subsystem state, bind it to a runtime-spawned actor's component, kick off a flow, step
+        it until a flag clears, then read values off two objects. Steps: spawn {class, at?, rotation?,
+        scale?, capture?} | set {target, path, value} | call {target, func, args?, capture?} |
+        read {target, property, capture?} | loop {while|until, max_iterations (REQUIRED), steps}.
+        Every step addresses its object the same way: a bare "target" string is an actor token, or
+        "target"/the step itself carries {actor|actorLabel|subsystem|objectPath|ref, component?,
+        viaProperty?} - which is how a named component subobject on a spawned actor, and an object a
+        UPROPERTY pointer was made to point at during the run, get named at all. viaProperty is
+        spelled apart from a step's own "property" because a read step and a loop condition each
+        carry one meaning the value to read. "capture" names a
+        step's result so a later step can use it as {"target": {"ref": "<name>"}}, and every capture
+        comes back in the returned captured map. The loop's max_iterations is mandatory and capped,
+        because a predicate that never clears would hang the dispatch. Validated in full before the
+        first step touches the world. No step waits for a tick - the world does not advance inside a
+        run, so use telemetry_start for anything that needs elapsed time.
+      schema:
+        steps:         { type: array,   description: "Ordered step objects (required, max 64)" }
+        on_error:      { type: string,  description: "abort (default) | continue" }
+        validate_only: { type: boolean, description: "Check the step list and return without running it" }
 
     # ── Declarative scenario (the committed Arrange/Act/Assert unit) ─
     scenario_scaffold:

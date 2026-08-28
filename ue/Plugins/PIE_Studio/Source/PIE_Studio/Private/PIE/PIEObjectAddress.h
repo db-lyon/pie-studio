@@ -37,7 +37,10 @@ namespace UEMCPPIE
 		FString Scope;        // game | world | localplayer | engine (empty = search all)
 		FString ObjectPath;   // direct object path
 		FString Ref;          // name captured by an earlier step in the same run
-		FString Property;     // dotted path from the base to an object-valued UPROPERTY
+		FString Property;     // "viaProperty": dotted path from the base to an object-valued
+		                      // UPROPERTY. Spelled apart from a step's own "property" on
+		                      // purpose: a read step and a loop condition each carry one
+		                      // meaning the value to read, which is not the same thing.
 
 		bool IsEmpty() const
 		{

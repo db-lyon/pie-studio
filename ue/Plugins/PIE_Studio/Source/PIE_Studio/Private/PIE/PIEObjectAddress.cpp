@@ -52,7 +52,7 @@ namespace UEMCPPIE
 		if (!Scope.IsEmpty())      Parts.Add(FString::Printf(TEXT("scope=%s"), *Scope));
 		if (!ObjectPath.IsEmpty()) Parts.Add(FString::Printf(TEXT("objectPath=%s"), *ObjectPath));
 		if (!Component.IsEmpty())  Parts.Add(FString::Printf(TEXT("component=%s"), *Component));
-		if (!Property.IsEmpty())   Parts.Add(FString::Printf(TEXT("property=%s"), *Property));
+		if (!Property.IsEmpty())   Parts.Add(FString::Printf(TEXT("viaProperty=%s"), *Property));
 		return Parts.Num() > 0 ? FString::Join(Parts, TEXT(" ")) : TEXT("<empty address>");
 	}
 
@@ -83,7 +83,10 @@ namespace UEMCPPIE
 		A.Scope      = FirstString(Source, { TEXT("scope") }).ToLower();
 		A.ObjectPath = FirstString(Source, { TEXT("objectPath"), TEXT("object_path") });
 		A.Ref        = FirstString(Source, { TEXT("ref"), TEXT("fromStep"), TEXT("from_step") });
-		A.Property   = FirstString(Source, { TEXT("property"), TEXT("propertyPath"), TEXT("property_path") });
+		// Deliberately NOT "property": a read step and a loop condition both carry a
+		// "property" of their own meaning the value to read, and one key cannot mean
+		// both "the object to reach" and "the value to test on it".
+		A.Property   = FirstString(Source, { TEXT("viaProperty"), TEXT("via_property"), TEXT("via") });
 		return A;
 	}
 

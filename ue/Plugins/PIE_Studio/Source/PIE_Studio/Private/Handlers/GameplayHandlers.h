@@ -43,6 +43,9 @@ public:
 	static TSharedPtr<FJsonValue> PieActorSet(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> PieActorCall(const TSharedPtr<FJsonObject>& Params);
 
+	// Orchestration: an ordered step list in one dispatch (#960)
+	static TSharedPtr<FJsonValue> PieRunSequence(const TSharedPtr<FJsonObject>& Params);
+
 	// Declarative scenario (Roadmap v2, F2)
 	static TSharedPtr<FJsonValue> PieScenarioScaffold(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> PieScenarioValidate(const TSharedPtr<FJsonObject>& Params);
