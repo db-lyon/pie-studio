@@ -1,4 +1,5 @@
 #include "PIEFrameSampler.h"
+#include "PIEObjectAddress.h"
 #include "PIE_StudioModule.h"
 #include "Engine/World.h"
 #include "Engine/LocalPlayer.h"
@@ -178,40 +179,6 @@ namespace UEMCPPIE
 			return false;
 		}
 
-		// Resolve a subsystem in the PIE world by short (or "U"-prefixed) class
-		// name, so tracked paths of the form "sub:MyGameSubsystem.Phase" can be
-		// sampled per frame (item 2b).
-		UObject* ResolveSubsystemByName(UWorld* World, const FString& ClassName)
-		{
-			if (!World) return nullptr;
-			auto Match = [&ClassName](UObject* O) -> bool
-			{
-				if (!O) return false;
-				const FString N = O->GetClass()->GetName();
-				return N == ClassName
-					|| N == (FString(TEXT("U")) + ClassName)
-					|| O->GetClass()->GetPathName() == ClassName;
-			};
-			if (UGameInstance* GI = World->GetGameInstance())
-			{
-				for (UGameInstanceSubsystem* S : GI->GetSubsystemArrayCopy<UGameInstanceSubsystem>())
-				{
-					if (Match(S)) return S;
-				}
-				if (ULocalPlayer* LP = GI->GetFirstGamePlayer())
-				{
-					for (ULocalPlayerSubsystem* S : LP->GetSubsystemArrayCopy<ULocalPlayerSubsystem>())
-					{
-						if (Match(S)) return S;
-					}
-				}
-			}
-			for (UWorldSubsystem* S : World->GetSubsystemArrayCopy<UWorldSubsystem>())
-			{
-				if (Match(S)) return S;
-			}
-			return nullptr;
-		}
 	}
 
 	FPIEFrameSampler::FPIEFrameSampler() = default;
@@ -477,7 +444,9 @@ namespace UEMCPPIE
 				FString ClassName, PropPath;
 				if (Rest.Split(TEXT("."), &ClassName, &PropPath))
 				{
-					if (UObject* SubObj = ResolveSubsystemByName(PIEWorld, ClassName))
+					// One resolver, shared with the addressing grammar the driving verbs
+					// use, so "sub:" here and a subsystem address there cannot disagree.
+					if (UObject* SubObj = FPIEObjectAddress::ResolveSubsystem(PIEWorld, ClassName, FString()))
 					{
 						if (ResolvePathToDouble(SubObj, PropPath, Val))
 						{
