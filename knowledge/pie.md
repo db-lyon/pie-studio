@@ -91,6 +91,65 @@ recording. `test_run` replays the recording (auto_run) then checks the finalised
 drift + error count against the assertions, returning `passed` + `failures` + the
 contact sheet. `test_list` enumerates them. This is the reproduce -> verify-a-fix loop.
 
+## Per-tick telemetry
+
+`telemetry_start` records an actor's state every tick for a bounded window and hands
+back a time series. Reach for it whenever one point-in-time read cannot answer the
+question: did the jump leave the ground, how high did it rise, how long was it
+airborne, did the impulse settle, did the blend finish, how long was the volume dwelt
+in. Built-in fields are location, rotation, velocity, speed, grounded, falling and
+distance_to_ground; `properties` adds dotted UPROPERTY paths (struct leaves come back
+as objects) and `getters` adds no-argument UFUNCTIONs invoked per tick.
+
+It returns immediately with an id, because a bridge handler runs on the game thread
+and a handler that blocked would stop the ticks it is sampling. Poll
+`telemetry_status` until `state=completed`, or end it early with `telemetry_stop`.
+`call_on_start` fires the thing under test right after the baseline sample, so
+"record, then jump" is one call rather than a race between two.
+
+The recorder is bounded by `duration_seconds` and `max_samples` together, both
+clamped, and is torn down on completion, on stop, on EndPIE, on module shutdown, and
+by a wall-clock watchdog if the world stops advancing. A sampler cannot outlive the
+call that started it.
+
+Read the answer off `summary`, not the rows: numeric channels carry
+first/last/min/max with the time of each extreme, vector channels are summarised per
+component (so rise height is `location.z.max - location.z.first`), and boolean
+channels carry their transitions plus seconds spent true and false (so air time is
+`grounded.false_seconds`).
+
+## Sequences and loops
+
+`run_sequence` runs an ordered step list inside ONE game-thread dispatch. Use it when
+a verification only means anything as a whole - create subsystem state, bind it to a
+runtime-spawned actor's component, kick a flow off, step it until a flag clears, then
+read two objects - and especially when another agent may be driving the same editor,
+since a call-per-step sequence loses to whoever ends PIE between calls.
+
+Steps are `spawn`, `set`, `call`, `read` and `loop`. Every step names its object
+through the same address: a bare `target` string is an actor token, or an object
+`{actor|actorLabel|subsystem|objectPath|ref, component?, viaProperty?}`. `component`
+reaches a named component subobject on an actor that was spawned at run time;
+`viaProperty` follows a UPROPERTY pointer to whatever it was made to point at during
+the flow; `ref` names a value an earlier step captured. `capture` on a step records
+its result under a name, and the names come back in `captured`.
+
+`loop` takes `while` or `until` (a property predicate: eq, ne, lt, lte, gt, gte,
+is_true, is_false) and a mandatory, capped `max_iterations`. The cap is not optional:
+the same single dispatch that makes the run uninterruptible means an unbounded
+predicate would hang the editor.
+
+Nothing waits for a tick inside a run. The world does not advance, so a step drives
+state through calls and reads; anything that needs elapsed time belongs in
+`telemetry_start`.
+
+`sample_loop` is the same guarantee for a different question: invoke a function N
+times (capped) and snapshot a set of addressed properties between every turn.
+Struct-valued properties come back as JSON objects rather than stringified blobs, and
+each invocation's own return value is recorded beside the snapshot. `stop_when` ends
+the loop early on a predicate. Use it to drive an ability activation while watching
+struct fields on two gameplay records turn by turn.
+
 ## Input injection
 
 `inject_input` / `inject_input_start` / `inject_input_tape` drive Enhanced Input
