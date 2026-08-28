@@ -13,6 +13,10 @@
 #include "Editor.h"
 #include "Engine/World.h"
 
+// The sequence runner and its context live in UEMCPPIE, the same as every other
+// PIE helper in this module. Every sibling handler file opens with this line.
+using namespace UEMCPPIE;
+
 TSharedPtr<FJsonValue> FGameplayHandlers::PieRunSequence(const TSharedPtr<FJsonObject>& Params)
 {
 	MCP_CHECK_GAME_THREAD();
