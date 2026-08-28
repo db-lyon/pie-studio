@@ -115,12 +115,13 @@ void FPIE_StudioModule::StartupModule()
 	UEMCP::RegisterExternalHandler(TEXT("actor_set"), &FGameplayHandlers::PieActorSet);
 	UEMCP::RegisterExternalHandler(TEXT("actor_call"), &FGameplayHandlers::PieActorCall);
 
-	// Orchestration (#960). Registered with a longer timeout than the default:
-	// the whole step list runs inside one game-thread dispatch, and a socket-side
-	// timeout that abandoned the wait while the game thread was still applying
-	// steps would leave the world half-driven - the exact failure this verb
-	// exists to remove.
+	// Orchestration (#955, #960). Registered with a longer timeout than the
+	// default: both run their whole sequence inside one game-thread dispatch, and
+	// a socket-side timeout that abandoned the wait while the game thread was
+	// still applying steps would leave the world half-driven - the exact failure
+	// these verbs exist to remove.
 	UEMCP::RegisterExternalHandlerWithTimeout(TEXT("run_sequence"), &FGameplayHandlers::PieRunSequence, 120.0f);
+	UEMCP::RegisterExternalHandlerWithTimeout(TEXT("sample_loop"), &FGameplayHandlers::PieSampleLoop, 120.0f);
 
 	// Declarative scenario (Roadmap v2, F2)
 	UEMCP::RegisterExternalHandler(TEXT("scenario_scaffold"), &FGameplayHandlers::PieScenarioScaffold);
@@ -213,6 +214,7 @@ void FPIE_StudioModule::ShutdownModule()
 	UEMCP::UnregisterExternalHandler(TEXT("actor_set"));
 	UEMCP::UnregisterExternalHandler(TEXT("actor_call"));
 	UEMCP::UnregisterExternalHandler(TEXT("run_sequence"));
+	UEMCP::UnregisterExternalHandler(TEXT("sample_loop"));
 	UEMCP::UnregisterExternalHandler(TEXT("scenario_scaffold"));
 	UEMCP::UnregisterExternalHandler(TEXT("scenario_validate"));
 

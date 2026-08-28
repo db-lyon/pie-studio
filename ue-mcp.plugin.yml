@@ -284,7 +284,7 @@ nativeModule:
         func:   { type: string, description: "Function name (required)" }
         args:   { type: array,  description: "Positional arguments, coerced into the function's parameters" }
 
-    # ── Orchestration: one uninterruptible dispatch (#960) ────────
+    # ── Orchestration: one uninterruptible dispatch (#955, #960) ───
     run_sequence:
       description: >-
         Run an ordered list of steps against the live PIE world inside ONE game-thread dispatch, so
@@ -308,6 +308,24 @@ nativeModule:
         steps:         { type: array,   description: "Ordered step objects (required, max 64)" }
         on_error:      { type: string,  description: "abort (default) | continue" }
         validate_only: { type: boolean, description: "Check the step list and return without running it" }
+    sample_loop:
+      description: >-
+        Invoke a function N times and snapshot a set of properties between every turn, all inside ONE
+        game-thread dispatch. Built for the case invoke_object_function cannot cover: looping an
+        ability activation while reading struct fields off two live gameplay records per turn.
+        Struct-valued properties come back as JSON objects, not stringified blobs, and each
+        invocation's own return value is recorded next to the snapshot because that answer is often
+        the verdict. Iterations are capped. Returns an optional baseline snapshot plus one entry per
+        turn. Nothing ticks between the call and the read, so turn N's snapshot is the state that
+        call produced.
+      schema:
+        iterations:    { type: number,  description: "How many turns to run (required, 1..1000)" }
+        invoke:        { type: object,  description: "Invoked each turn: {actor|subsystem|objectPath|ref, component?, func, args?}" }
+        invokes:       { type: array,   description: "Several invocations per turn, in order (alternative to invoke)" }
+        sample:        { type: array,   description: "Snapshotted after each turn: [{actor|subsystem|objectPath|ref, component?, property, name?}] (required)" }
+        stop_when:     { type: object,  description: "Stop before the next turn when this holds: {target..., property, op?, value?, tolerance?}. Ops: eq|ne|lt|lte|gt|gte|is_true|is_false" }
+        sample_before: { type: boolean, description: "Take a baseline snapshot before the first turn (default true)" }
+        on_error:      { type: string,  description: "abort (default) | continue" }
 
     # ── Declarative scenario (the committed Arrange/Act/Assert unit) ─
     scenario_scaffold:
