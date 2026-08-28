@@ -518,13 +518,6 @@ namespace UEMCPPIE
 		return nullptr;
 	}
 
-	TArray<const FTelemetryRun*> FPIETelemetryRecorder::All() const
-	{
-		TArray<const FTelemetryRun*> Out;
-		for (const FTelemetryRun& Run : Runs) Out.Add(&Run);
-		return Out;
-	}
-
 	void FPIETelemetryRecorder::SweepCompleted()
 	{
 		int32 Completed = 0;

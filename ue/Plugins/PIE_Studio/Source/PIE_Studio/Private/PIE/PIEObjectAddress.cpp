@@ -143,14 +143,13 @@ namespace UEMCPPIE
 		// The editor label is what an agent reads off the outliner, so it decides
 		// outright; object name, class name and path resolve the misses. FindActorById
 		// carries the name/class/path-suffix half already.
+#if WITH_EDITOR
 		for (TActorIterator<AActor> It(World); It; ++It)
 		{
 			AActor* A = *It;
-			if (!IsValid(A)) continue;
-#if WITH_EDITOR
-			if (A->GetActorLabel() == Token) return A;
-#endif
+			if (IsValid(A) && A->GetActorLabel() == Token) return A;
 		}
+#endif
 		return FindActorById(World, Token);
 	}
 

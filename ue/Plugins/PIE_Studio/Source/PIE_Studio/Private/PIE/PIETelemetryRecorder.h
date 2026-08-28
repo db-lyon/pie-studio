@@ -128,7 +128,6 @@ namespace UEMCPPIE
 
 		// Find a run by id, or the most recent one when Id is empty.
 		const FTelemetryRun* Find(const FString& Id) const;
-		TArray<const FTelemetryRun*> All() const;
 		bool HasLiveRuns() const;
 
 		// Serialise a run: state, the sample series, and the per-channel summary a
