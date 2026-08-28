@@ -6,6 +6,7 @@
 #include "PIE/PIEInputRecorder.h"
 #include "PIE/PIEInputReplayer.h"
 #include "PIE/PIEObserver.h"
+#include "PIE/PIETelemetryRecorder.h"
 #include "PIE/PIESessionLog.h"
 #include "UI/SMCPPIEPanel.h"
 #include "Editor.h"
@@ -21,6 +22,7 @@ void FPIE_StudioModule::StartupModule()
 	UEMCPPIE::FPIEInputRecorder::Get().Init();
 	UEMCPPIE::FPIEInputReplayer::Get().Init();
 	UEMCPPIE::FPIEObserver::Get().Init();
+	UEMCPPIE::FPIETelemetryRecorder::Get().Init();
 	UEMCPPIE::FPIESessionLog::Get().Init();
 	SMCPPIEPanel::RegisterTab();
 	SMCPPIEPanel::RegisterToolbarButton();
@@ -101,6 +103,11 @@ void FPIE_StudioModule::StartupModule()
 
 	// Assertion layer (Roadmap v2, Phase A)
 	UEMCP::RegisterExternalHandler(TEXT("assert_eval"), &FGameplayHandlers::PieAssertEval);
+
+	// Per-tick actor telemetry (#954)
+	UEMCP::RegisterExternalHandler(TEXT("telemetry_start"), &FGameplayHandlers::PieTelemetryStart);
+	UEMCP::RegisterExternalHandler(TEXT("telemetry_status"), &FGameplayHandlers::PieTelemetryStatus);
+	UEMCP::RegisterExternalHandler(TEXT("telemetry_stop"), &FGameplayHandlers::PieTelemetryStop);
 
 	// Actor puppeteering (Roadmap v2, F1)
 	UEMCP::RegisterExternalHandler(TEXT("actor_spawn"), &FGameplayHandlers::PieActorSpawn);
@@ -191,6 +198,9 @@ void FPIE_StudioModule::ShutdownModule()
 	UEMCP::UnregisterExternalHandler(TEXT("test_run"));
 	UEMCP::UnregisterExternalHandler(TEXT("test_list"));
 	UEMCP::UnregisterExternalHandler(TEXT("assert_eval"));
+	UEMCP::UnregisterExternalHandler(TEXT("telemetry_start"));
+	UEMCP::UnregisterExternalHandler(TEXT("telemetry_status"));
+	UEMCP::UnregisterExternalHandler(TEXT("telemetry_stop"));
 	UEMCP::UnregisterExternalHandler(TEXT("actor_spawn"));
 	UEMCP::UnregisterExternalHandler(TEXT("actor_destroy"));
 	UEMCP::UnregisterExternalHandler(TEXT("actor_set"));
@@ -200,6 +210,7 @@ void FPIE_StudioModule::ShutdownModule()
 
 	UEMCPPIE::FPIESessionLog::Get().Shutdown();
 	UEMCPPIE::FPIEObserver::Get().Shutdown();
+	UEMCPPIE::FPIETelemetryRecorder::Get().Shutdown();
 	UEMCPPIE::FPIEInputReplayer::Get().Shutdown();
 	UEMCPPIE::FPIEInputRecorder::Get().Shutdown();
 	UEMCPPIE::FPIEInputInjector::Shutdown();

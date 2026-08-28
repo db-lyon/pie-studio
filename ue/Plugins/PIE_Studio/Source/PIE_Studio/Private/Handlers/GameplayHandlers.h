@@ -32,6 +32,11 @@ public:
 	// Assertion layer (Roadmap v2, Phase A)
 	static TSharedPtr<FJsonValue> PieAssertEval(const TSharedPtr<FJsonObject>& Params);
 
+	// Per-tick actor telemetry (#954)
+	static TSharedPtr<FJsonValue> PieTelemetryStart(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieTelemetryStatus(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieTelemetryStop(const TSharedPtr<FJsonObject>& Params);
+
 	// Actor puppeteering (Roadmap v2, F1)
 	static TSharedPtr<FJsonValue> PieActorSpawn(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> PieActorDestroy(const TSharedPtr<FJsonObject>& Params);

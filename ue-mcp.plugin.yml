@@ -228,6 +228,37 @@ nativeModule:
         recording_dir:      { type: string }
         name:               { type: string,  description: "Snapshot filename (default: timestamp)" }
 
+    # ── Per-tick actor telemetry (#954) ───────────────────────────
+    telemetry_start:
+      description: "Record an actor's state every tick for a bounded window and return it as a time series. Use when one point-in-time read cannot answer the question: did the jump leave the ground, how high did it rise, how long was it airborne, did the impulse settle, did the blend finish. Returns immediately with an id - a bridge handler runs on the game thread, so blocking here would stop the ticks being sampled. Poll telemetry_status until state=completed. Bounded by duration_seconds AND max_samples (whichever comes first), and torn down on completion, stop, EndPIE or a stalled world, so no sampler can outlive the call."
+      schema:
+        actorLabel:              { type: string,  description: "Subject actor: editor label, object name, class name, or path. Required unless every channel names its own target." }
+        component:               { type: string,  description: "Narrow the subject to a named component subobject, by name or class" }
+        subsystem:               { type: string,  description: "Subject is a running subsystem instead of an actor (class short name or path)" }
+        scope:                   { type: string,  description: "Subsystem scope: game | world | localplayer | engine (default: search all)" }
+        objectPath:              { type: string,  description: "Subject is the object at this path" }
+        property:                { type: string,  description: "Follow a dotted UPROPERTY path from the subject to the object it points at (e.g. an actor pointer set at run time)" }
+        fields:                  { type: array,   description: "Built-in channels: location | rotation | velocity | speed | grounded | falling | distance_to_ground (default: location, velocity, grounded)" }
+        properties:              { type: array,   description: "Dotted property paths sampled each tick. Strings, or {name, path, actor?/subsystem?/component?} to rename or point at another object. Struct leaves come back as objects." }
+        getters:                 { type: array,   description: "No-argument UFUNCTIONs invoked each tick, return value recorded. Strings, or {name, func, actor?/subsystem?/component?}. A function that takes arguments is rejected at start." }
+        duration_seconds:        { type: number,  description: "Stop after this much world time (default 2, hard cap 60)" }
+        max_samples:             { type: number,  description: "Stop after this many samples (default 600, hard cap 20000)" }
+        sample_every_tick:       { type: boolean, description: "Sample on every rendered frame (default true)" }
+        sample_interval_seconds: { type: number,  description: "Sample at most this often instead of every tick" }
+        every_n_ticks:           { type: number,  description: "Sample one tick in N (default 1)" }
+        call_on_start:           { type: object,  description: "{func, args?, actor?/component?/subsystem?} invoked once, right after the baseline sample. Kicks off the thing under test without a second round trip." }
+        id:                      { type: string,  description: "Caller-chosen recording id (default: minted)" }
+    telemetry_status:
+      description: "Poll a telemetry recording. Returns state, sample count, elapsed time, and the stop reason once finished. A finished run returns its samples and per-channel summary by default: numeric channels carry first/last/min/max with the time of each extreme, vector channels are summarised per component, and boolean channels carry their transitions plus seconds spent true and false - which is what a rise height and an air time are read off."
+      schema:
+        id:              { type: string,  description: "Recording id (default: the most recent)" }
+        include_samples: { type: boolean, description: "Include the raw per-tick rows (default: true once completed, false while recording)" }
+    telemetry_stop:
+      description: "Stop a telemetry recording early and return its series and summary. Omit id to stop every live recording."
+      schema:
+        id:              { type: string,  description: "Recording id (default: all live recordings)" }
+        include_samples: { type: boolean, description: "Include the raw per-tick rows (default true)" }
+
     # ── Actor puppeteering (Arrange: write the live world) ─────────
     actor_spawn:
       description: "Spawn an actor in the live PIE world so an agent can Arrange a scenario. Returns a stable id (usable as target for actor_set/call/destroy and snapshot)."
