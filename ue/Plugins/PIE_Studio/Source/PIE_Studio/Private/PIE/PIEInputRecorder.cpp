@@ -1,4 +1,5 @@
 #include "PIEInputRecorder.h"
+#include "PIEMousePrototype.h"
 #include "PIETakeRecorderBridge.h"
 #include "PIE_StudioModule.h"
 #include "Editor.h"
@@ -70,6 +71,7 @@ namespace UEMCPPIE
 
 	void FPIEInputRecorder::Shutdown()
 	{
+		MousePrototype::Shutdown();
 		if (BeginPIEHandle.IsValid()) FEditorDelegates::BeginPIE.Remove(BeginPIEHandle);
 		if (EndPIEHandle.IsValid())   FEditorDelegates::EndPIE.Remove(EndPIEHandle);
 		BeginPIEHandle.Reset();
@@ -208,6 +210,7 @@ namespace UEMCPPIE
 				CSVHeader = BuildCSVHeader(CSVHdr);
 				CSVBody.Reset();
 
+				StartTime = MousePrototype::BeginRecord();
 				State = ERecorderState::Recording;
 			}
 			return;
@@ -215,7 +218,7 @@ namespace UEMCPPIE
 
 		if (State == ERecorderState::Recording)
 		{
-			const double GameTime = PIEWorld->GetTimeSeconds();
+			const double GameTime = FPlatformTime::Seconds() - StartTime;
 			const double Dt = PIEWorld->GetDeltaSeconds();
 			const uint64 FrameNum = static_cast<uint64>(Rows.Num());
 			FCSVRow Row = Sampler.SampleFrame(PIEWorld, FrameNum, GameTime, Dt);
@@ -372,11 +375,13 @@ namespace UEMCPPIE
 			Out.Steps.Add(S);
 		}
 
+		MousePrototype::RemoveDuplicateButtonSteps(Out, BaseTime);
 		Out.Steps.Sort([](const FStep& A, const FStep& B) { return A.DelayMs < B.DelayMs; });
 	}
 
 	FRecorderFinishResult FPIEInputRecorder::FinaliseCurrent()
 	{
+		MousePrototype::EndRecord(CurrentDir, Rows.IsEmpty() ? 0. : Rows[0].Time);
 		FRecorderFinishResult R;
 		if (State == ERecorderState::Idle)
 		{

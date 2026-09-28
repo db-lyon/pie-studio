@@ -123,6 +123,11 @@ pie(action="record_read", id="some-recording", file="drift")
 
 ## Develop
 
+An experimental physical mouse/keyboard capture proposal is documented in
+[Input capture prototype](docs/input-capture-prototype.md), including its
+acceptance criteria, observed results, and remaining work. It does not establish
+deterministic gameplay replay.
+
 ```bash
 npm install
 npm run build

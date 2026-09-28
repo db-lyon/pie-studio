@@ -1,4 +1,6 @@
 #include "PIEInputReplayer.h"
+#include "PIEMousePrototype.h"
+#include "HAL/PlatformTime.h"
 #include "PIEViewportCapture.h"
 #include "PIEGifEncoder.h"
 #include "PIEContactSheet.h"
@@ -107,6 +109,7 @@ namespace UEMCPPIE
 
 	void FPIEInputReplayer::Shutdown()
 	{
+		MousePrototype::EndReplay();
 		if (BeginPIEHandle.IsValid()) FEditorDelegates::BeginPIE.Remove(BeginPIEHandle);
 		if (EndPIEHandle.IsValid())   FEditorDelegates::EndPIE.Remove(EndPIEHandle);
 		BeginPIEHandle.Reset();
@@ -278,6 +281,7 @@ namespace UEMCPPIE
 		}
 
 		Pending = Cfg;
+		MousePrototype::LoadReplay(TEXT(""));
 		ActiveSequence = FSequence();
 		SourceFrames.Reset();
 		CurrentSourceCSV.Reset();
@@ -312,6 +316,7 @@ namespace UEMCPPIE
 		}
 		else if (!Cfg.SequencePath.IsEmpty())
 		{
+			MousePrototype::LoadReplay(FPaths::GetPath(Cfg.SequencePath));
 			if (!LoadSequence(Cfg.SequencePath, ActiveSequence, Err))
 			{
 				OutError = Err;
@@ -328,6 +333,7 @@ namespace UEMCPPIE
 				OutError = Err;
 				return false;
 			}
+			MousePrototype::LoadReplay(Dir);
 			if (Cfg.bRecordDrift)
 			{
 				CurrentSourceCSV = Dir / TEXT("recording.csv");
@@ -618,6 +624,7 @@ namespace UEMCPPIE
 				}
 
 				AttachTime = PIEWorld->GetTimeSeconds();
+				MousePrototype::BeginReplay();
 				State = EReplayerState::Replaying;
 			}
 			return;
@@ -628,10 +635,11 @@ namespace UEMCPPIE
 			const double Now = PIEWorld->GetTimeSeconds();
 			// Settle delay before step processing.
 			const int32 Settle = (Pending.SettleMs >= 0) ? Pending.SettleMs : ActiveSequence.SettleMs;
-			const double ElapsedMs = (Now - AttachTime) * 1000.0;
+			const double ElapsedMs = (MousePrototype::HasReplay() ? MousePrototype::ReplaySeconds() : Now - AttachTime) * 1000.0;
 			if (ElapsedMs >= Settle && !Pending.bMonitor)
 			{
 				ExecutePendingSteps(ElapsedMs - Settle);
+				MousePrototype::Advance(ElapsedMs - Settle);
 			}
 
 			// Per-frame viewport capture (off by default). Counted off the
@@ -820,7 +828,7 @@ namespace UEMCPPIE
 			// Auto-stop when all steps consumed and all holds released. In
 			// monitor mode the steps were never executed so we drive completion
 			// purely off frame count against the source recording.
-			const bool bStepsDone = Pending.bMonitor ? true : (NextStepIndex >= ActiveSequence.Steps.Num() && ActiveHolds.Num() == 0);
+			const bool bStepsDone = Pending.bMonitor ? true : (NextStepIndex >= ActiveSequence.Steps.Num() && ActiveHolds.Num() == 0 && MousePrototype::IsDone());
 			if (bStepsDone)
 			{
 				// Stay in Replaying for one more sample frame to let drift catch
@@ -855,6 +863,7 @@ namespace UEMCPPIE
 
 	FReplayerFinishResult FPIEInputReplayer::FinaliseCurrent()
 	{
+		MousePrototype::EndReplay();
 		FReplayerFinishResult R;
 		if (State == EReplayerState::Idle)
 		{
