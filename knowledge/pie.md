@@ -122,7 +122,13 @@ Separate-process PIE clients (Run Under One Process off) are not reachable by
 `pie_instance`. Call `clients`; pass `client` (1..N) to `inject_input`,
 `inject_input_start`, `inject_input_tape` or `console` to drive that remote
 player through the game connection. `remote_result` confirms a relayed request
-was applied. `client` 0 (or omitted) targets the host.
+was applied. `client` 0 (or omitted) targets the host's local player console,
+the same path as `editor(execute_command, world="pie")`; prefer that core action
+when no remote players are involved.
+
+`actor_call` runs the UFUNCTION in the PIE instance that owns the actor, like
+`editor(invoke_object_function)`, and reports `callContext` (`playInstance`, or
+`editorScriptGuard` for an object outside an initialised game world).
 
 To verify multiplayer behaviour without a human, write a scenario and call
 `uat_run` (see the README): it opens the map, starts PIE, drives each step and

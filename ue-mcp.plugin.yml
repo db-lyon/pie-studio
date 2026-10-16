@@ -1,5 +1,5 @@
 actionPrefix: "pie"
-minServerVersion: "1.3.0"    # MCPResolveActorToken / MCPResolveClass landed in the 1.3.0 bridge
+minServerVersion: "1.4.8-beta.1"    # MCPFunctionCall::ProcessEventInOwnContext / FMCPScopedPlayWorldContext landed in the 1.4.8-beta.1 bridge
 
 # All actions are implemented by the PIE_Studio C++ module, which registers
 # them on the bridge via UEMCP::RegisterExternalHandler. `nativeModule.category`
@@ -72,7 +72,7 @@ nativeModule:
       description: "List the players of a networked PIE session: client 0 is the editor's own player (listen server), clients 1..N are remote players in join order, including separate-process clients. ready=true once a client can run relayed requests"
       schema: {}
     console:
-      description: "Run a console command in a player's process: client 0 (default) the editor's play world, 1..N that remote player's own process"
+      description: "Run a console command in a player's process: 1..N relays to that remote player's own process. Client 0 (default) is the editor's local player console, run in its PIE instance exactly like editor(execute_command, world=pie), which is the core action to use when no remote players are involved"
       schema:
         command: { type: string, description: "Console command (required)" }
         client:  { type: number, description: "0 = editor's player, 1..N = remote player (default 0)" }
@@ -289,7 +289,7 @@ nativeModule:
         path:   { type: string, description: "Dotted property path, e.g. Health or Movement.MaxWalkSpeed (required)" }
         value:  { type: string, description: "Value to write, as text: \"100\", \"true\", \"EMyEnum::Foo\", \"(X=1,Y=2)\" (required)" }
     actor_call:
-      description: "Invoke a callable UFUNCTION on a live PIE actor, importing args positionally into its parameters."
+      description: "Invoke a callable UFUNCTION on a live PIE actor, importing args positionally into its parameters. Runs in the PIE instance that owns the actor, like editor(invoke_object_function); callContext reports playInstance or editorScriptGuard, with world and pieInstance."
       schema:
         target: { type: string, description: "Actor id (required)" }
         func:   { type: string, description: "Function name (required)" }

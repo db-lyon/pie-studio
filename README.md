@@ -8,7 +8,7 @@ PIE record, replay, observe, and input injection for [ue-mcp](https://github.com
 ue-mcp plugin install pie-studio
 ```
 
-This installs the npm package, deploys the native C++ module to your project's `Plugins/` directory, and adds the plugin to your `ue-mcp.yml`. Rebuild the UE project before launching the editor.
+Requires ue-mcp 1.4.8-beta.1 or later. This installs the npm package, deploys the native C++ module to your project's `Plugins/` directory, and adds the plugin to your `ue-mcp.yml`. Rebuild the UE project before launching the editor.
 
 ## Editor UI
 
@@ -74,7 +74,7 @@ With **Run Under One Process** off, every client is a separate `-game` process t
 
 - `clients` lists the session: net mode, the host player, and each remote player as `client` 1..N with a `ready` flag.
 - `inject_input`, `inject_input_start` and `inject_input_tape` take `client`; 1 or more relays to that remote player. `inject_input_update` and `inject_input_stop` route by the returned id.
-- `console` runs a command on the server (`client` 0) or on a remote player.
+- `console` runs a command on a remote player (`client` 1..N). `client` 0 is the editor's local player console, the same path as core's `editor(execute_command, world="pie")`; use that core action when no remote players are involved.
 - `remote_result` reports whether a relayed request was applied and, for tapes, finished.
 
 The runtime half lives in the `PIE_StudioRuntime` module (`DeveloperTool`), which loads in the client processes.
@@ -147,6 +147,7 @@ pie(action="record_read", id="some-recording", file="drift")
 - **Observation** — `observe_arm`, `observe_disarm`, `observe_stop`, `observe_status`, `observe_list`, `observe_read` with profile-based sampling
 - **Input injection** — `inject_input`, `inject_input_start`, `inject_input_update`, `inject_input_stop`, `inject_input_tape`
 - **Remote players** — `clients`, `console`, `remote_result`
+- **Arrange**: `actor_set`, `actor_call` (runs in the PIE instance that owns the actor and reports `callContext`), `actor_spawn`, `actor_destroy`
 - **Acceptance runs** — `uat_run`, `uat_status`, `uat_abort`
 - **Profiles** — `profile_create`, `profile_read`, `profile_update`, `profile_delete`, `profile_list`
 - **Diff / Snapshot** — `record_diff`, `snapshot`
