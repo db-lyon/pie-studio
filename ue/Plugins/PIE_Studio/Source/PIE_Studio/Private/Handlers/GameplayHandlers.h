@@ -10,7 +10,6 @@ public:
 	// PIE inspection
 	static TSharedPtr<FJsonValue> GetPieAnimState(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> GetPieAnimProperties(const TSharedPtr<FJsonObject>& Params);
-	static TSharedPtr<FJsonValue> GetPieSubsystemState(const TSharedPtr<FJsonObject>& Params);
 
 	// Session log / errors
 	static TSharedPtr<FJsonValue> PieSessionErrors(const TSharedPtr<FJsonObject>& Params);
@@ -72,7 +71,6 @@ public:
 
 	// Diff / Snapshot
 	static TSharedPtr<FJsonValue> PieRecordDiff(const TSharedPtr<FJsonObject>& Params);
-	static TSharedPtr<FJsonValue> PieSnapshot(const TSharedPtr<FJsonObject>& Params);
 
 	// Observation profiles
 	static TSharedPtr<FJsonValue> PieProfileCreate(const TSharedPtr<FJsonObject>& Params);

@@ -150,8 +150,8 @@ pie(action="record_read", id="some-recording", file="drift")
 - **Live actors** live in core: `level(spawn_transient_actor|destroy_transient_actor, world="pie")`, `editor(set_object_property|invoke_object_function, world="pie")`. Scenario `arrange` steps keep `spawn`, `set` and `call`.
 - **Acceptance runs** — `uat_run`, `uat_status`, `uat_abort`
 - **Profiles** — `profile_create`, `profile_read`, `profile_update`, `profile_delete`, `profile_list`
-- **Diff / Snapshot** — `record_diff`, `snapshot`
-- **PIE inspection** — `anim_state`, `anim_properties`, `subsystem_state`
+- **Diff** — `record_diff`
+- **PIE inspection** — `anim_state`, `anim_properties`. Actor and subsystem properties are core's `editor(get_object_properties, world="pie")` (`target="subsystem"` with `subsystemClass`) and `editor(get_runtime_values)`
 - **Session log** — `session_errors`, `session_log`
 
 ## Data Layout

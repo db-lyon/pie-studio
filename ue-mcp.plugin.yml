@@ -20,7 +20,7 @@ nativeModule:
   minBridgeApi: 1
   source: ue/Plugins/PIE_Studio
   category: pie
-  categoryDescription: "PIE test automation: record, replay, observe, diff, snapshot, and inject input during Play-In-Editor sessions"
+  categoryDescription: "PIE test automation: record, replay, observe, diff, and inject input during Play-In-Editor sessions"
   handlers:
 
     # ── Input injection ───────────────────────────────────────────
@@ -260,15 +260,6 @@ nativeModule:
         tracked_default:    { type: number, description: "Default tracked-value threshold" }
         tracked_thresholds: { type: object, description: "Per-path tracked-value thresholds" }
 
-    # ── Snapshot ──────────────────────────────────────────────────
-    snapshot:
-      description: "Snapshot a PIE actor's full UProperty state to JSON"
-      schema:
-        target:             { type: string,  description: "Actor id to snapshot (required)" }
-        include_components: { type: boolean, description: "Dump components too (default true)" }
-        recording_id:       { type: string,  description: "Store under this recording's snapshots/ dir" }
-        recording_dir:      { type: string }
-        name:               { type: string,  description: "Snapshot filename (default: timestamp)" }
 
 
     # ── Declarative scenario (the committed Arrange/Act/Assert unit) ─
@@ -370,12 +361,6 @@ nativeModule:
       schema:
         actorLabel:    { type: string, description: "Actor label/name in PIE (required)" }
         propertyNames: { type: array,  description: "Specific property names (default: all)" }
-    subsystem_state:
-      description: "Read UPROPERTY values on a running subsystem in PIE"
-      schema:
-        subsystemClass: { type: string, description: "Subsystem class short name or path (required)" }
-        scope:          { type: string, description: "game | engine | world | localplayer (default game)" }
-        propertyNames:  { type: array,  description: "Specific property names (default: all)" }
 
     # ── Session log / errors ──────────────────────────────────────
     session_errors:

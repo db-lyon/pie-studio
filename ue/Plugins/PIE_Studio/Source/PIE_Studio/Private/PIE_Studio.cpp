@@ -83,7 +83,6 @@ void FPIE_StudioModule::StartupModule()
 
 	// Diff / Snapshot
 	UEMCP::RegisterExternalHandler(TEXT("record_diff"), &FGameplayHandlers::PieRecordDiff);
-	UEMCP::RegisterExternalHandler(TEXT("snapshot"), &FGameplayHandlers::PieSnapshot);
 
 	// Observation profiles
 	UEMCP::RegisterExternalHandler(TEXT("profile_create"), &FGameplayHandlers::PieProfileCreate);
@@ -103,7 +102,6 @@ void FPIE_StudioModule::StartupModule()
 	// PIE inspection
 	UEMCP::RegisterExternalHandler(TEXT("anim_state"), &FGameplayHandlers::GetPieAnimState);
 	UEMCP::RegisterExternalHandler(TEXT("anim_properties"), &FGameplayHandlers::GetPieAnimProperties);
-	UEMCP::RegisterExternalHandler(TEXT("subsystem_state"), &FGameplayHandlers::GetPieSubsystemState);
 
 	// Session log / errors + standalone capture
 	UEMCP::RegisterExternalHandler(TEXT("session_errors"), &FGameplayHandlers::PieSessionErrors);
@@ -187,7 +185,6 @@ void FPIE_StudioModule::ShutdownModule()
 	UEMCP::UnregisterExternalHandler(TEXT("replay_analyze"));
 	UEMCP::UnregisterExternalHandler(TEXT("replay_state"));
 	UEMCP::UnregisterExternalHandler(TEXT("record_diff"));
-	UEMCP::UnregisterExternalHandler(TEXT("snapshot"));
 	UEMCP::UnregisterExternalHandler(TEXT("profile_create"));
 	UEMCP::UnregisterExternalHandler(TEXT("profile_read"));
 	UEMCP::UnregisterExternalHandler(TEXT("profile_update"));
@@ -201,7 +198,6 @@ void FPIE_StudioModule::ShutdownModule()
 	UEMCP::UnregisterExternalHandler(TEXT("observe_read"));
 	UEMCP::UnregisterExternalHandler(TEXT("anim_state"));
 	UEMCP::UnregisterExternalHandler(TEXT("anim_properties"));
-	UEMCP::UnregisterExternalHandler(TEXT("subsystem_state"));
 	UEMCP::UnregisterExternalHandler(TEXT("session_errors"));
 	UEMCP::UnregisterExternalHandler(TEXT("session_log"));
 	UEMCP::UnregisterExternalHandler(TEXT("perf_summary"));
