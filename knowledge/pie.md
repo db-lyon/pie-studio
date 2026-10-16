@@ -126,7 +126,9 @@ was applied. `client` 0 (or omitted) targets the host's local player console,
 the same path as `editor(execute_command, world="pie")`; prefer that core action
 when no remote players are involved.
 
-To arrange live PIE actors outside a scenario, use core: `level(spawn_transient_actor,
+The pie actions `trace_start`, `trace_stop`, `capture`, `actor_spawn`, `actor_destroy`,
+`actor_set`, `actor_call`, `snapshot` and `subsystem_state` are deprecated and removed
+in the next release. To arrange live PIE actors outside a scenario, use core: `level(spawn_transient_actor,
 world="pie")`, `level(destroy_transient_actor)`, `editor(set_object_property)` and
 `editor(invoke_object_function)`. A scenario's `arrange` `call` step runs in the PIE
 instance that owns the actor, the same way `invoke_object_function` does.

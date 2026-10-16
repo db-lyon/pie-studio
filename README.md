@@ -137,7 +137,7 @@ pie(action="record_read", id="some-recording", file="drift")
 
 ## MCP Actions
 
-49 actions in the `pie` category (provisioned by the plugin; call as `pie(action="...")`):
+58 actions in the `pie` category (provisioned by the plugin; call as `pie(action="...")`), 9 of them deprecated (below):
 
 - **Recording**: `record_arm`, `record_disarm`, `record_stop`, `record_status`, `record_list`, `record_read`, `record_delete`, `mark`
 - **Replay**: `replay_arm`, `replay_run` (unattended), `replay_disarm`, `replay_stop`, `replay_status` with drift tracking and viewport capture
@@ -153,6 +153,20 @@ pie(action="record_read", id="some-recording", file="drift")
 - **Diff**: `record_diff`
 - **PIE inspection**: `anim_state`, `anim_properties`. Actor and subsystem properties are core's `editor(get_object_properties, world="pie")` (`target="subsystem"` with `subsystemClass`) and `editor(get_runtime_values)`
 - **Session log**: `session_errors`, `session_log`
+
+### Deprecated actions
+
+These duplicate core actions. They keep working for one release so installed setups and saved calls do not break, each result carries a `deprecated` field naming its replacement, and the next release removes them. Use the core action instead:
+
+| pie action | core action |
+|---|---|
+| `trace_start`, `trace_stop` | `editor(start_trace)`, `editor(stop_trace)` |
+| `capture` | `editor(capture_screenshot, target="pie")`, `editor(capture_scene_png, world="pie")` |
+| `actor_spawn`, `actor_destroy` | `level(spawn_transient_actor, world="pie")`, `level(destroy_transient_actor)` |
+| `actor_set`, `actor_call` | `editor(set_object_property)`, `editor(invoke_object_function)` |
+| `snapshot`, `subsystem_state` | `editor(get_object_properties)` (`target="subsystem"` with `subsystemClass` for a subsystem), `editor(get_runtime_values)` |
+
+Scenario `arrange` steps (`spawn`, `set`, `call`) are not deprecated.
 
 ## Data Layout
 

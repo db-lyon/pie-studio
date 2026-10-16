@@ -180,3 +180,106 @@ TSharedPtr<FJsonValue> FGameplayHandlers::GetPieAnimProperties(const TSharedPtr<
 	Result->SetObjectField(TEXT("properties"), Props);
 	return MCPResult(Result);
 }
+
+// ─────────────────────────────────────────────────────────────
+// get_pie_subsystem_state
+// ─────────────────────────────────────────────────────────────
+TSharedPtr<FJsonValue> FGameplayHandlers::GetPieSubsystemState(const TSharedPtr<FJsonObject>& Params)
+{
+	FString SubsystemClassName;
+	if (auto Err = RequireString(Params, TEXT("subsystemClass"), SubsystemClassName)) return Err;
+
+	UClass* SubClass = nullptr;
+	if (SubsystemClassName.Contains(TEXT("/")) || SubsystemClassName.Contains(TEXT(".")))
+	{
+		SubClass = LoadObject<UClass>(nullptr, *SubsystemClassName);
+	}
+	if (!SubClass)
+	{
+		SubClass = MCPResolveClass(SubsystemClassName);
+	}
+	if (!SubClass) return MCPError(FString::Printf(TEXT("Subsystem class not found: %s"), *SubsystemClassName));
+
+	const FString Scope = OptionalString(Params, TEXT("scope"), TEXT("game")).ToLower();
+
+	UWorld* PIEWorld = GetPIEWorld();
+	if (!PIEWorld) return MCPError(TEXT("No PIE world available. Is Play-In-Editor running?"));
+
+	USubsystem* Subsystem = nullptr;
+	if (Scope == TEXT("engine"))
+	{
+		Subsystem = GEngine ? GEngine->GetEngineSubsystemBase(SubClass) : nullptr;
+	}
+	else if (Scope == TEXT("world"))
+	{
+		Subsystem = PIEWorld->GetSubsystemBase(SubClass);
+	}
+	else if (Scope == TEXT("localplayer"))
+	{
+		ULocalPlayer* LP = PIEWorld->GetFirstLocalPlayerFromController();
+		if (!LP) return MCPError(TEXT("No LocalPlayer in PIE world"));
+		Subsystem = LP->GetSubsystemBase(SubClass);
+	}
+	else
+	{
+		UGameInstance* GI = PIEWorld->GetGameInstance();
+		if (!GI) return MCPError(TEXT("No GameInstance in PIE world"));
+		Subsystem = GI->GetSubsystemBase(SubClass);
+	}
+
+	if (!Subsystem) return MCPError(FString::Printf(TEXT("Subsystem not found: %s (scope=%s)"), *SubsystemClassName, *Scope));
+
+	TArray<FString> RequestedNames;
+	const TArray<TSharedPtr<FJsonValue>>* NamesArr = nullptr;
+	if (Params->TryGetArrayField(TEXT("propertyNames"), NamesArr) && NamesArr)
+	{
+		for (const TSharedPtr<FJsonValue>& V : *NamesArr)
+		{
+			FString S;
+			if (V.IsValid() && V->TryGetString(S)) RequestedNames.Add(S);
+		}
+	}
+
+	auto ExportOne = [Subsystem](FProperty* Prop) -> FString
+	{
+		FString ValueStr;
+		const void* ValuePtr = Prop->ContainerPtrToValuePtr<void>(Subsystem);
+		Prop->ExportText_Direct(ValueStr, ValuePtr, ValuePtr, Subsystem, PPF_None);
+		return ValueStr;
+	};
+
+	TSharedPtr<FJsonObject> Props = MakeShared<FJsonObject>();
+	if (RequestedNames.Num() > 0)
+	{
+		for (const FString& Name : RequestedNames)
+		{
+			FProperty* Prop = Subsystem->GetClass()->FindPropertyByName(*Name);
+			if (!Prop)
+			{
+				Props->SetStringField(Name, TEXT("<not found>"));
+				continue;
+			}
+			TSharedPtr<FJsonObject> Entry = MakeShared<FJsonObject>();
+			Entry->SetStringField(TEXT("type"), Prop->GetCPPType());
+			Entry->SetStringField(TEXT("value"), ExportOne(Prop));
+			Props->SetObjectField(Name, Entry);
+		}
+	}
+	else
+	{
+		for (TFieldIterator<FProperty> It(Subsystem->GetClass()); It; ++It)
+		{
+			FProperty* Prop = *It;
+			TSharedPtr<FJsonObject> Entry = MakeShared<FJsonObject>();
+			Entry->SetStringField(TEXT("type"), Prop->GetCPPType());
+			Entry->SetStringField(TEXT("value"), ExportOne(Prop));
+			Props->SetObjectField(Prop->GetName(), Entry);
+		}
+	}
+
+	auto Result = MCPSuccess();
+	Result->SetStringField(TEXT("subsystemClass"), Subsystem->GetClass()->GetPathName());
+	Result->SetStringField(TEXT("scope"), Scope);
+	Result->SetObjectField(TEXT("properties"), Props);
+	return MCPResult(Result);
+}

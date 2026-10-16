@@ -1,4 +1,6 @@
-// Automation coverage for perf_summary over a synthetic recording.csv.
+// Automation coverage for profiling handlers (roadmap items 4a + 4b):
+// perf_summary over a synthetic recording.csv, and a trace_start/trace_stop
+// round-trip that writes a .utrace.
 
 #include "Misc/AutomationTest.h"
 
@@ -75,6 +77,53 @@ bool FPIEPerfSummaryTest::RunTest(const FString& /*Parameters*/)
 	}
 
 	IFileManager::Get().DeleteDirectory(*Folder, false, true);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FPIETraceRoundTripTest,
+	"PIEStudio.Perf.TraceStartStop",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPIETraceRoundTripTest::RunTest(const FString& /*Parameters*/)
+{
+	// Clear any pre-existing trace so Start is ours.
+	FGameplayHandlers::PieTraceStop(MakeShared<FJsonObject>());
+
+	const FString Dir = FPaths::ProjectSavedDir() / TEXT("MCPTraceTest") /
+		FGuid::NewGuid().ToString(EGuidFormats::Digits);
+
+	TSharedPtr<FJsonObject> P = MakeShared<FJsonObject>();
+	P->SetStringField(TEXT("output_dir"), Dir);
+	P->SetStringField(TEXT("channels"), TEXT("frame,bookmark,stats,counters"));
+	TSharedPtr<FJsonValue> StartRes = FGameplayHandlers::PieTraceStart(P);
+	const TSharedPtr<FJsonObject> SO = StartRes.IsValid() ? StartRes->AsObject() : nullptr;
+
+	bool bStarted = false;
+	FString TracePath;
+	if (SO.IsValid())
+	{
+		SO->TryGetBoolField(TEXT("started"), bStarted);
+		SO->TryGetStringField(TEXT("trace_path"), TracePath);
+	}
+
+	if (!bStarted)
+	{
+		// Tracing can be unavailable/occupied in some hosts; do not hard-fail.
+		AddWarning(TEXT("trace_start did not start (tracing unavailable or already active in this host)"));
+		return true;
+	}
+
+	TestFalse(TEXT("trace path returned"), TracePath.IsEmpty());
+
+	TSharedPtr<FJsonValue> StopRes = FGameplayHandlers::PieTraceStop(MakeShared<FJsonObject>());
+	const TSharedPtr<FJsonObject> StopO = StopRes.IsValid() ? StopRes->AsObject() : nullptr;
+	TestTrue(TEXT("stop result"), StopO.IsValid());
+
+	if (!TracePath.IsEmpty())
+	{
+		IFileManager::Get().DeleteDirectory(*Dir, false, true);
+	}
 	return true;
 }
 
