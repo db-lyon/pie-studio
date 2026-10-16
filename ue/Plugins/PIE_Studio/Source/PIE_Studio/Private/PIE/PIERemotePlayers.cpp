@@ -2,6 +2,7 @@
 
 #include "PIE_StudioModule.h"
 #include "PIEStudioRemoteControl.h"
+#include "HandlerWorld.h"
 #include "Editor.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -77,6 +78,34 @@ namespace UEMCPPIE::PIERemotePlayers
 			}
 		}
 		return nullptr;
+	}
+
+	UWorld* FindLocalPlayerWorld()
+	{
+		UWorld* World = FindServerWorld();
+		if (!World && GEditor)
+		{
+			World = GEditor->PlayWorld;
+		}
+		return World;
+	}
+
+	FString RunLocalConsole(UWorld* World, const FString& Command)
+	{
+		if (!World || !GEngine)
+		{
+			return FString();
+		}
+		FMCPScopedPlayWorldContext PlayContext(World);
+		// Through the controller where there is one, so player-scoped commands (Net PktLoss, cheats) reach the
+		// right connection.
+		if (APlayerController* PC = World->GetFirstPlayerController(); PC && PC->IsLocalController())
+		{
+			PC->ConsoleCommand(Command, /*bWriteToLog*/ true);
+			return TEXT("playerController");
+		}
+		GEngine->Exec(World, *Command);
+		return TEXT("engine");
 	}
 
 	TArray<FRemotePlayer> List()

@@ -61,28 +61,22 @@ TSharedPtr<FJsonValue> FGameplayHandlers::PieConsole(const TSharedPtr<FJsonObjec
 		return MCPResult(Result);
 	}
 
-	// The editor's own player: its play world, through its controller where there is one so player-scoped commands
-	// (Net PktLoss, cheats) reach the right connection.
-	UWorld* World = UEMCPPIE::PIERemotePlayers::FindServerWorld();
-	if (!World && GEditor)
-	{
-		World = GEditor->PlayWorld;
-	}
+	// Client 0 is the editor's own player, run the way core's editor(execute_command, world=pie) runs it.
+	UWorld* World = UEMCPPIE::PIERemotePlayers::FindLocalPlayerWorld();
 	if (!World)
 	{
 		return MCPError(TEXT("console: no PIE session is running"));
 	}
-	if (APlayerController* PC = World->GetFirstPlayerController(); PC && PC->IsLocalController())
-	{
-		PC->ConsoleCommand(Command, /*bWriteToLog*/ true);
-	}
-	else
-	{
-		GEngine->Exec(World, *Command);
-	}
+	const FString Route = UEMCPPIE::PIERemotePlayers::RunLocalConsole(World, Command);
 	auto Result = MCPSuccess();
 	Result->SetNumberField(TEXT("client"), 0);
 	Result->SetStringField(TEXT("command"), Command);
+	Result->SetStringField(TEXT("route"), Route);
+	Result->SetStringField(TEXT("world"), World->GetPathName());
+	if (const FWorldContext* Ctx = GEngine ? GEngine->GetWorldContextFromWorld(World) : nullptr)
+	{
+		Result->SetNumberField(TEXT("pieInstance"), Ctx->PIEInstance);
+	}
 	return MCPResult(Result);
 }
 
