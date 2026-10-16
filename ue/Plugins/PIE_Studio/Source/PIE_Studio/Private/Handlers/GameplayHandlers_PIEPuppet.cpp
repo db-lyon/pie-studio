@@ -7,6 +7,7 @@
 #include "PIE/PIEActorPuppet.h"
 #include "PIE/PIESequenceFormat.h"   // FindActorById
 #include "Editor.h"
+#include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 
@@ -122,7 +123,8 @@ TSharedPtr<FJsonValue> FGameplayHandlers::PieActorCall(const TSharedPtr<FJsonObj
 	if (Params->TryGetArrayField(TEXT("args"), ArgArr) && ArgArr) Args = *ArgArr;
 
 	FString Err;
-	if (!UEMCPPIE::FPIEActorPuppet::CallFunction(Actor, Func, Args, Err))
+	bool bUsedEditorGuard = false;
+	if (!UEMCPPIE::FPIEActorPuppet::CallFunction(Actor, Func, Args, Err, &bUsedEditorGuard))
 	{
 		return MCPError(Err);
 	}
@@ -131,5 +133,12 @@ TSharedPtr<FJsonValue> FGameplayHandlers::PieActorCall(const TSharedPtr<FJsonObj
 	Result->SetStringField(TEXT("target"), Target);
 	Result->SetStringField(TEXT("func"), Func);
 	Result->SetBoolField(TEXT("called"), true);
+	// Same vocabulary as core's invoke_object_function.
+	Result->SetStringField(TEXT("callContext"), bUsedEditorGuard ? TEXT("editorScriptGuard") : TEXT("playInstance"));
+	Result->SetStringField(TEXT("world"), Actor->GetWorld()->GetPathName());
+	if (const FWorldContext* Ctx = GEngine ? GEngine->GetWorldContextFromWorld(Actor->GetWorld()) : nullptr)
+	{
+		Result->SetNumberField(TEXT("pieInstance"), Ctx->PIEInstance);
+	}
 	return MCPResult(Result);
 }
