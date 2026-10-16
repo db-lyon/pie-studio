@@ -270,30 +270,6 @@ nativeModule:
         recording_dir:      { type: string }
         name:               { type: string,  description: "Snapshot filename (default: timestamp)" }
 
-    # ── Actor puppeteering (Arrange: write the live world) ─────────
-    actor_spawn:
-      description: "Spawn an actor in the live PIE world so an agent can Arrange a scenario. Returns a stable id (usable as target for actor_set/call/destroy and snapshot)."
-      schema:
-        class:    { type: string, description: "Class path: native class or blueprint '/Game/.../BP_X.BP_X_C' (required)" }
-        at:       { type: array,  description: "World location [x,y,z] (default origin)" }
-        rotation: { type: array,  description: "Rotation [pitch,yaw,roll] (default 0)" }
-        scale:    { type: array,  description: "Scale [x,y,z] (default 1)" }
-    actor_destroy:
-      description: "Destroy a live PIE actor by id."
-      schema:
-        target: { type: string, description: "Actor id (required)" }
-    actor_set:
-      description: "Set a UProperty on a live PIE actor by dotted path (Component.Struct.Property), coerced through ImportText. This is the write half of snapshot's reflection read."
-      schema:
-        target: { type: string, description: "Actor id (required)" }
-        path:   { type: string, description: "Dotted property path, e.g. Health or Movement.MaxWalkSpeed (required)" }
-        value:  { type: string, description: "Value to write, as text: \"100\", \"true\", \"EMyEnum::Foo\", \"(X=1,Y=2)\" (required)" }
-    actor_call:
-      description: "Invoke a callable UFUNCTION on a live PIE actor, importing args positionally into its parameters. Runs in the PIE instance that owns the actor, like editor(invoke_object_function); callContext reports playInstance or editorScriptGuard, with world and pieInstance."
-      schema:
-        target: { type: string, description: "Actor id (required)" }
-        func:   { type: string, description: "Function name (required)" }
-        args:   { type: array,  description: "Positional arguments, coerced into the function's parameters" }
 
     # ── Declarative scenario (the committed Arrange/Act/Assert unit) ─
     scenario_scaffold:
@@ -426,7 +402,6 @@ nativeModule:
         recording_id:  { type: string, description: "Recording id" }
         recording_dir: { type: string, description: "Recording folder (used directly when no id is given)" }
 
-    # ── Standalone viewport capture ───────────────────────────────
 
 inject: {}
 tasks: {}

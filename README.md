@@ -147,7 +147,7 @@ pie(action="record_read", id="some-recording", file="drift")
 - **Observation** — `observe_arm`, `observe_disarm`, `observe_stop`, `observe_status`, `observe_list`, `observe_read` with profile-based sampling
 - **Input injection** — `inject_input`, `inject_input_start`, `inject_input_update`, `inject_input_stop`, `inject_input_tape`
 - **Remote players** — `clients`, `console`, `remote_result`
-- **Arrange**: `actor_set`, `actor_call` (runs in the PIE instance that owns the actor and reports `callContext`), `actor_spawn`, `actor_destroy`
+- **Live actors** live in core: `level(spawn_transient_actor|destroy_transient_actor, world="pie")`, `editor(set_object_property|invoke_object_function, world="pie")`. Scenario `arrange` steps keep `spawn`, `set` and `call`.
 - **Acceptance runs** — `uat_run`, `uat_status`, `uat_abort`
 - **Profiles** — `profile_create`, `profile_read`, `profile_update`, `profile_delete`, `profile_list`
 - **Diff / Snapshot** — `record_diff`, `snapshot`

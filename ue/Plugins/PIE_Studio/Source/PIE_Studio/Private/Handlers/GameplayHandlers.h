@@ -16,8 +16,6 @@ public:
 	static TSharedPtr<FJsonValue> PieSessionErrors(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> PieSessionLog(const TSharedPtr<FJsonObject>& Params);
 
-	// Standalone viewport capture
-
 	// Profiling
 	static TSharedPtr<FJsonValue> PiePerfSummary(const TSharedPtr<FJsonObject>& Params);
 
@@ -28,12 +26,6 @@ public:
 
 	// Assertion layer (Roadmap v2, Phase A)
 	static TSharedPtr<FJsonValue> PieAssertEval(const TSharedPtr<FJsonObject>& Params);
-
-	// Actor puppeteering (Roadmap v2, F1)
-	static TSharedPtr<FJsonValue> PieActorSpawn(const TSharedPtr<FJsonObject>& Params);
-	static TSharedPtr<FJsonValue> PieActorDestroy(const TSharedPtr<FJsonObject>& Params);
-	static TSharedPtr<FJsonValue> PieActorSet(const TSharedPtr<FJsonObject>& Params);
-	static TSharedPtr<FJsonValue> PieActorCall(const TSharedPtr<FJsonObject>& Params);
 
 	// Declarative scenario (Roadmap v2, F2)
 	static TSharedPtr<FJsonValue> PieScenarioScaffold(const TSharedPtr<FJsonObject>& Params);

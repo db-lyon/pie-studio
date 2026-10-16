@@ -121,10 +121,6 @@ void FPIE_StudioModule::StartupModule()
 	UEMCP::RegisterExternalHandler(TEXT("assert_eval"), &FGameplayHandlers::PieAssertEval);
 
 	// Actor puppeteering (Roadmap v2, F1)
-	UEMCP::RegisterExternalHandler(TEXT("actor_spawn"), &FGameplayHandlers::PieActorSpawn);
-	UEMCP::RegisterExternalHandler(TEXT("actor_destroy"), &FGameplayHandlers::PieActorDestroy);
-	UEMCP::RegisterExternalHandler(TEXT("actor_set"), &FGameplayHandlers::PieActorSet);
-	UEMCP::RegisterExternalHandler(TEXT("actor_call"), &FGameplayHandlers::PieActorCall);
 
 	// Declarative scenario (Roadmap v2, F2)
 	UEMCP::RegisterExternalHandler(TEXT("scenario_scaffold"), &FGameplayHandlers::PieScenarioScaffold);
@@ -213,10 +209,6 @@ void FPIE_StudioModule::ShutdownModule()
 	UEMCP::UnregisterExternalHandler(TEXT("test_run"));
 	UEMCP::UnregisterExternalHandler(TEXT("test_list"));
 	UEMCP::UnregisterExternalHandler(TEXT("assert_eval"));
-	UEMCP::UnregisterExternalHandler(TEXT("actor_spawn"));
-	UEMCP::UnregisterExternalHandler(TEXT("actor_destroy"));
-	UEMCP::UnregisterExternalHandler(TEXT("actor_set"));
-	UEMCP::UnregisterExternalHandler(TEXT("actor_call"));
 	UEMCP::UnregisterExternalHandler(TEXT("scenario_scaffold"));
 	UEMCP::UnregisterExternalHandler(TEXT("scenario_validate"));
 
