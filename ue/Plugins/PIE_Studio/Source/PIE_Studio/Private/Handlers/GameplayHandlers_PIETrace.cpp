@@ -1,14 +1,10 @@
-// Unreal Insights trace handlers: trace_start, trace_stop (roadmap item 4b).
-// Members of FGameplayHandlers. Wraps FTraceAuxiliary to capture a .utrace the
-// user opens in Unreal Insights, and returns its path.
+// perf_summary: frame-time aggregates over a recording. Members of FGameplayHandlers.
+// Unreal Insights traces are core's editor(start_trace) and editor(stop_trace).
 
 #include "GameplayHandlers.h"
 #include "HandlerUtils.h"
-#include "ProfilingDebugging/TraceAuxiliary.h"
 #include "Misc/Paths.h"
-#include "Misc/DateTime.h"
 #include "Misc/FileHelper.h"
-#include "HAL/FileManager.h"
 #include "PIE/PIESequenceFormat.h"
 
 namespace
@@ -21,72 +17,6 @@ namespace
 		const int32 Idx = FMath::Clamp(FMath::RoundToInt(P * (SortedAsc.Num() - 1)), 0, SortedAsc.Num() - 1);
 		return SortedAsc[Idx];
 	}
-}
-
-namespace
-{
-	// Path of the trace we most recently started, so trace_stop can report it.
-	static FString GLastTracePath;
-}
-
-TSharedPtr<FJsonValue> FGameplayHandlers::PieTraceStart(const TSharedPtr<FJsonObject>& Params)
-{
-	MCP_CHECK_GAME_THREAD();
-
-	const FString Channels = OptionalString(Params, TEXT("channels"), TEXT("cpu,frame,bookmark,stats,counters,gpu"));
-
-	FString Dir = OptionalString(Params, TEXT("output_dir"));
-	if (Dir.IsEmpty())
-	{
-		Dir = FPaths::ProjectSavedDir() / TEXT("MCPTraces");
-	}
-	IFileManager::Get().MakeDirectory(*Dir, true);
-
-	FString Name = OptionalString(Params, TEXT("name"));
-	if (Name.IsEmpty())
-	{
-		Name = FString::Printf(TEXT("pie_%s.utrace"), *FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")));
-	}
-	if (!Name.EndsWith(TEXT(".utrace")))
-	{
-		Name += TEXT(".utrace");
-	}
-	const FString Path = FPaths::ConvertRelativePathToFull(Dir / Name);
-
-	FTraceAuxiliary::FOptions Opts;
-	Opts.bTruncateFile = true;
-	const bool bStarted = FTraceAuxiliary::Start(
-		FTraceAuxiliary::EConnectionType::File, *Path, *Channels, &Opts);
-
-	if (!bStarted)
-	{
-		return MCPError(TEXT("Failed to start trace (a trace may already be active, or tracing is compiled out). Call trace_stop and retry."));
-	}
-
-	GLastTracePath = Path;
-
-	auto Result = MCPSuccess();
-	Result->SetBoolField(TEXT("started"), true);
-	Result->SetStringField(TEXT("trace_path"), Path);
-	Result->SetStringField(TEXT("channels"), Channels);
-	Result->SetStringField(TEXT("open_with"), TEXT("Unreal Insights (UnrealInsights.exe) — open the .utrace to inspect CPU/GPU/frame timing"));
-	return MCPResult(Result);
-}
-
-TSharedPtr<FJsonValue> FGameplayHandlers::PieTraceStop(const TSharedPtr<FJsonObject>& /*Params*/)
-{
-	MCP_CHECK_GAME_THREAD();
-
-	const bool bStopped = FTraceAuxiliary::Stop();
-
-	auto Result = MCPSuccess();
-	Result->SetBoolField(TEXT("stopped"), bStopped);
-	if (!GLastTracePath.IsEmpty())
-	{
-		Result->SetStringField(TEXT("trace_path"), GLastTracePath);
-		Result->SetBoolField(TEXT("file_exists"), FPaths::FileExists(GLastTracePath));
-	}
-	return MCPResult(Result);
 }
 
 // Item 4a: aggregate the per-frame perf columns of a recording.csv into a lead:

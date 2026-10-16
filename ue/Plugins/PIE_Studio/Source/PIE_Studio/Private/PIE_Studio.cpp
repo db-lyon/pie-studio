@@ -111,8 +111,6 @@ void FPIE_StudioModule::StartupModule()
 	UEMCP::RegisterExternalHandler(TEXT("capture"), &FGameplayHandlers::PieCapture);
 
 	// Profiling
-	UEMCP::RegisterExternalHandler(TEXT("trace_start"), &FGameplayHandlers::PieTraceStart);
-	UEMCP::RegisterExternalHandler(TEXT("trace_stop"), &FGameplayHandlers::PieTraceStop);
 	UEMCP::RegisterExternalHandler(TEXT("perf_summary"), &FGameplayHandlers::PiePerfSummary);
 
 	// Reproduction tests
@@ -212,8 +210,6 @@ void FPIE_StudioModule::ShutdownModule()
 	UEMCP::UnregisterExternalHandler(TEXT("session_errors"));
 	UEMCP::UnregisterExternalHandler(TEXT("session_log"));
 	UEMCP::UnregisterExternalHandler(TEXT("capture"));
-	UEMCP::UnregisterExternalHandler(TEXT("trace_start"));
-	UEMCP::UnregisterExternalHandler(TEXT("trace_stop"));
 	UEMCP::UnregisterExternalHandler(TEXT("perf_summary"));
 	UEMCP::UnregisterExternalHandler(TEXT("test_scaffold"));
 	UEMCP::UnregisterExternalHandler(TEXT("test_run"));

@@ -101,7 +101,7 @@ threshold) - a curve over time, not one value.
 
 `perf_summary(recording_dir)` aggregates the per-frame perf columns into frametime
 avg/p50/p99/max, avg game/render/gpu ms, peak memory, and the worst hitches with
-timestamps. `trace_start` / `trace_stop` capture an Unreal Insights `.utrace`.
+timestamps. Core's `editor(start_trace)` / `editor(stop_trace)` capture an Unreal Insights `.utrace`.
 
 ## Reproduction tests
 

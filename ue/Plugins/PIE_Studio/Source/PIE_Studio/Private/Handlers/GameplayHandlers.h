@@ -20,8 +20,6 @@ public:
 	static TSharedPtr<FJsonValue> PieCapture(const TSharedPtr<FJsonObject>& Params);
 
 	// Profiling
-	static TSharedPtr<FJsonValue> PieTraceStart(const TSharedPtr<FJsonObject>& Params);
-	static TSharedPtr<FJsonValue> PieTraceStop(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> PiePerfSummary(const TSharedPtr<FJsonObject>& Params);
 
 	// Reproduction tests
