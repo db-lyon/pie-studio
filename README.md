@@ -24,16 +24,16 @@ PIE Studio adds a toolbar button group to the UE5 editor (next to the Play contr
 
 ### Panel Sections
 
-**Recorder** — status display showing current state, recording ID, frame count, and elapsed time.
+**Recorder**: status display showing current state, recording ID, frame count, and elapsed time.
 
-**Time Scale** — slider and quick-set buttons (1%, 10%, 25%, 50%, 100%, 200%) to control PIE playback speed. Persists across PIE restarts. From an agent, use core's `editor(set_pie_time_scale)`.
+**Time Scale**: slider and quick-set buttons (1%, 10%, 25%, 50%, 100%, 200%) to control PIE playback speed. Persists across PIE restarts. From an agent, use core's `editor(set_pie_time_scale)`.
 
-**Recordings** — lists all saved recordings with:
+**Recordings**: lists all saved recordings with:
 - Play button to replay (arms replayer + active observation profiles, starts PIE, captures viewport frames, generates GIF)
 - Delete button
 - Collapsible GIF list per recording with Open (launches in default viewer) and Delete
 
-**Observation Profiles** — manages `UMCPObservationProfile` data assets:
+**Observation Profiles**: manages `UMCPObservationProfile` data assets:
 - Checkbox toggles to mark profiles as active
 - Active profiles automatically observe during replay
 - Create, Edit (opens UE asset editor), Delete, Refresh
@@ -139,20 +139,20 @@ pie(action="record_read", id="some-recording", file="drift")
 
 49 actions in the `pie` category (provisioned by the plugin; call as `pie(action="...")`):
 
-- **Recording** — `record_arm`, `record_disarm`, `record_stop`, `record_status`, `record_list`, `record_read`, `record_delete`, `mark`
-- **Replay** — `replay_arm`, `replay_run` (unattended), `replay_disarm`, `replay_stop`, `replay_status` with drift tracking and viewport capture
-- **Analysis** — `replay_analyze` (first-divergence lead + errors + images), `replay_state` (deterministic scrub/snapshot)
-- **Profiling** — `perf_summary` (frametime p50/p99, GPU, hitches). Unreal Insights traces are core's `editor(start_trace)` / `editor(stop_trace)`
-- **Reproduction tests** — `test_scaffold`, `test_run`, `test_list`
-- **Observation** — `observe_arm`, `observe_disarm`, `observe_stop`, `observe_status`, `observe_list`, `observe_read` with profile-based sampling
-- **Input injection** — `inject_input`, `inject_input_start`, `inject_input_update`, `inject_input_stop`, `inject_input_tape`
-- **Remote players** — `clients`, `console`, `remote_result`
+- **Recording**: `record_arm`, `record_disarm`, `record_stop`, `record_status`, `record_list`, `record_read`, `record_delete`, `mark`
+- **Replay**: `replay_arm`, `replay_run` (unattended), `replay_disarm`, `replay_stop`, `replay_status` with drift tracking and viewport capture
+- **Analysis**: `replay_analyze` (first-divergence lead + errors + images), `replay_state` (deterministic scrub/snapshot)
+- **Profiling**: `perf_summary` (frametime p50/p99, GPU, hitches). Unreal Insights traces are core's `editor(start_trace)` / `editor(stop_trace)`
+- **Reproduction tests**: `test_scaffold`, `test_run`, `test_list`
+- **Observation**: `observe_arm`, `observe_disarm`, `observe_stop`, `observe_status`, `observe_list`, `observe_read` with profile-based sampling
+- **Input injection**: `inject_input`, `inject_input_start`, `inject_input_update`, `inject_input_stop`, `inject_input_tape`
+- **Remote players**: `clients`, `console`, `remote_result`
 - **Live actors** live in core: `level(spawn_transient_actor|destroy_transient_actor, world="pie")`, `editor(set_object_property|invoke_object_function, world="pie")`. Scenario `arrange` steps keep `spawn`, `set` and `call`.
-- **Acceptance runs** — `uat_run`, `uat_status`, `uat_abort`
-- **Profiles** — `profile_create`, `profile_read`, `profile_update`, `profile_delete`, `profile_list`
-- **Diff** — `record_diff`
-- **PIE inspection** — `anim_state`, `anim_properties`. Actor and subsystem properties are core's `editor(get_object_properties, world="pie")` (`target="subsystem"` with `subsystemClass`) and `editor(get_runtime_values)`
-- **Session log** — `session_errors`, `session_log`
+- **Acceptance runs**: `uat_run`, `uat_status`, `uat_abort`
+- **Profiles**: `profile_create`, `profile_read`, `profile_update`, `profile_delete`, `profile_list`
+- **Diff**: `record_diff`
+- **PIE inspection**: `anim_state`, `anim_properties`. Actor and subsystem properties are core's `editor(get_object_properties, world="pie")` (`target="subsystem"` with `subsystemClass`) and `editor(get_runtime_values)`
+- **Session log**: `session_errors`, `session_log`
 
 ## Data Layout
 
