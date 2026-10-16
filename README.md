@@ -8,7 +8,7 @@ PIE record, replay, observe, and input injection for [ue-mcp](https://github.com
 ue-mcp plugin install pie-studio
 ```
 
-This installs the npm package, deploys the native C++ module to your project's `Plugins/` directory, and adds the plugin to your `ue-mcp.yml`. Rebuild the UE project before launching the editor.
+Requires ue-mcp 1.4.8-beta.1 or later. This installs the npm package, deploys the native C++ module to your project's `Plugins/` directory, and adds the plugin to your `ue-mcp.yml`. Rebuild the UE project before launching the editor.
 
 ## Editor UI
 
@@ -24,16 +24,16 @@ PIE Studio adds a toolbar button group to the UE5 editor (next to the Play contr
 
 ### Panel Sections
 
-**Recorder** — status display showing current state, recording ID, frame count, and elapsed time.
+**Recorder**: status display showing current state, recording ID, frame count, and elapsed time.
 
-**Time Scale** — slider and quick-set buttons (1%, 10%, 25%, 50%, 100%, 200%) to control PIE playback speed. Persists across PIE restarts.
+**Time Scale**: slider and quick-set buttons (1%, 10%, 25%, 50%, 100%, 200%) to control PIE playback speed. Persists across PIE restarts. From an agent, use core's `editor(set_pie_time_scale)`.
 
-**Recordings** — lists all saved recordings with:
+**Recordings**: lists all saved recordings with:
 - Play button to replay (arms replayer + active observation profiles, starts PIE, captures viewport frames, generates GIF)
 - Delete button
 - Collapsible GIF list per recording with Open (launches in default viewer) and Delete
 
-**Observation Profiles** — manages `UMCPObservationProfile` data assets:
+**Observation Profiles**: manages `UMCPObservationProfile` data assets:
 - Checkbox toggles to mark profiles as active
 - Active profiles automatically observe during replay
 - Create, Edit (opens UE asset editor), Delete, Refresh
@@ -74,7 +74,7 @@ With **Run Under One Process** off, every client is a separate `-game` process t
 
 - `clients` lists the session: net mode, the host player, and each remote player as `client` 1..N with a `ready` flag.
 - `inject_input`, `inject_input_start` and `inject_input_tape` take `client`; 1 or more relays to that remote player. `inject_input_update` and `inject_input_stop` route by the returned id.
-- `console` runs a command on the server (`client` 0) or on a remote player.
+- `console` runs a command on a remote player (`client` 1..N). `client` 0 is the editor's local player console, the same path as core's `editor(execute_command, world="pie")`; use that core action when no remote players are involved.
 - `remote_result` reports whether a relayed request was applied and, for tapes, finished.
 
 The runtime half lives in the `PIE_StudioRuntime` module (`DeveloperTool`), which loads in the client processes.
@@ -116,7 +116,7 @@ When `capture_frame_every` is set, replay grabs viewport frames as **JPEGs** (ke
 
 Animated GIF is now **opt-in** (`encode_gif=true`). A vision model cannot parse GIF animation, so it is off by default and exists only for human eyeballing.
 
-`capture` grabs frames from the live PIE viewport on demand, decoupled from replay, so observe and inject flows can be visual too.
+For a frame of the live PIE viewport on demand, decoupled from replay, use core's `editor(capture_screenshot, target="pie")` or `editor(capture_scene_png, world="pie")`.
 
 ## Session Errors
 
@@ -137,22 +137,36 @@ pie(action="record_read", id="some-recording", file="drift")
 
 ## MCP Actions
 
-58 actions in the `pie` category (provisioned by the plugin; call as `pie(action="...")`):
+58 actions in the `pie` category (provisioned by the plugin; call as `pie(action="...")`), 9 of them deprecated (below):
 
-- **Recording** — `record_arm`, `record_disarm`, `record_stop`, `record_status`, `record_list`, `record_read`, `record_delete`, `mark`
-- **Replay** — `replay_arm`, `replay_run` (unattended), `replay_disarm`, `replay_stop`, `replay_status` with drift tracking and viewport capture
-- **Analysis** — `replay_analyze` (first-divergence lead + errors + images), `replay_state` (deterministic scrub/snapshot)
-- **Profiling** — `perf_summary` (frametime p50/p99, GPU, hitches), `trace_start`, `trace_stop` (Unreal Insights `.utrace`)
-- **Reproduction tests** — `test_scaffold`, `test_run`, `test_list`
-- **Observation** — `observe_arm`, `observe_disarm`, `observe_stop`, `observe_status`, `observe_list`, `observe_read` with profile-based sampling
-- **Input injection** — `inject_input`, `inject_input_start`, `inject_input_update`, `inject_input_stop`, `inject_input_tape`
-- **Remote players** — `clients`, `console`, `remote_result`
-- **Acceptance runs** — `uat_run`, `uat_status`, `uat_abort`
-- **Profiles** — `profile_create`, `profile_read`, `profile_update`, `profile_delete`, `profile_list`
-- **Diff / Snapshot** — `record_diff`, `snapshot`
-- **PIE inspection** — `anim_state`, `anim_properties`, `subsystem_state`
-- **Session log** — `session_errors`, `session_log`
-- **Capture** — `capture` (standalone viewport frames + contact sheet)
+- **Recording**: `record_arm`, `record_disarm`, `record_stop`, `record_status`, `record_list`, `record_read`, `record_delete`, `mark`
+- **Replay**: `replay_arm`, `replay_run` (unattended), `replay_disarm`, `replay_stop`, `replay_status` with drift tracking and viewport capture
+- **Analysis**: `replay_analyze` (first-divergence lead + errors + images), `replay_state` (deterministic scrub/snapshot)
+- **Profiling**: `perf_summary` (frametime p50/p99, GPU, hitches). Unreal Insights traces are core's `editor(start_trace)` / `editor(stop_trace)`
+- **Reproduction tests**: `test_scaffold`, `test_run`, `test_list`
+- **Observation**: `observe_arm`, `observe_disarm`, `observe_stop`, `observe_status`, `observe_list`, `observe_read` with profile-based sampling
+- **Input injection**: `inject_input`, `inject_input_start`, `inject_input_update`, `inject_input_stop`, `inject_input_tape`
+- **Remote players**: `clients`, `console`, `remote_result`
+- **Live actors** live in core: `level(spawn_transient_actor|destroy_transient_actor, world="pie")`, `editor(set_object_property|invoke_object_function, world="pie")`. Scenario `arrange` steps keep `spawn`, `set` and `call`.
+- **Acceptance runs**: `uat_run`, `uat_status`, `uat_abort`
+- **Profiles**: `profile_create`, `profile_read`, `profile_update`, `profile_delete`, `profile_list`
+- **Diff**: `record_diff`
+- **PIE inspection**: `anim_state`, `anim_properties`. Actor and subsystem properties are core's `editor(get_object_properties, world="pie")` (`target="subsystem"` with `subsystemClass`) and `editor(get_runtime_values)`
+- **Session log**: `session_errors`, `session_log`
+
+### Deprecated actions
+
+These duplicate core actions. They keep working for one release so installed setups and saved calls do not break, each result carries a `deprecated` field naming its replacement, and the next release removes them. Use the core action instead:
+
+| pie action | core action |
+|---|---|
+| `trace_start`, `trace_stop` | `editor(start_trace)`, `editor(stop_trace)` |
+| `capture` | `editor(capture_screenshot, target="pie")`, `editor(capture_scene_png, world="pie")` |
+| `actor_spawn`, `actor_destroy` | `level(spawn_transient_actor, world="pie")`, `level(destroy_transient_actor)` |
+| `actor_set`, `actor_call` | `editor(set_object_property)`, `editor(invoke_object_function)` |
+| `snapshot`, `subsystem_state` | `editor(get_object_properties)` (`target="subsystem"` with `subsystemClass` for a subsystem), `editor(get_runtime_values)` |
+
+Scenario `arrange` steps (`spawn`, `set`, `call`) are not deprecated.
 
 ## Data Layout
 

@@ -31,6 +31,16 @@ namespace UEMCPPIE::PIERemotePlayers
 	/** The PIE world acting as server, or null when no networked PIE session is running. */
 	UWorld* FindServerWorld();
 
+	/** Client 0's world: the server world, else the editor's play world. Null when PIE is not running. */
+	UWorld* FindLocalPlayerWorld();
+
+	/**
+	 * Runs Command as client 0, the same way core's editor(execute_command, world=pie) does: inside the PIE
+	 * instance that owns World, through its local player controller, or against the world on a dedicated server.
+	 * Returns the route taken ("playerController" or "engine").
+	 */
+	FString RunLocalConsole(UWorld* World, const FString& Command);
+
 	/** Every remote player, numbered from 1 in join order. */
 	TArray<FRemotePlayer> List();
 

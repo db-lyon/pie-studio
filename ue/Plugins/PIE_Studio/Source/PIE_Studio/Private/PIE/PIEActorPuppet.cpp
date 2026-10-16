@@ -1,4 +1,5 @@
 #include "PIE/PIEActorPuppet.h"
+#include "HandlerFunctionCall.h"
 #include "GameFramework/Actor.h"
 #include "Components/ActorComponent.h"
 #include "Engine/World.h"
@@ -148,7 +149,8 @@ namespace UEMCPPIE
 	}
 
 	bool FPIEActorPuppet::CallFunction(UObject* Target, const FString& FuncName,
-	                                   const TArray<TSharedPtr<FJsonValue>>& Args, FString& OutError)
+	                                   const TArray<TSharedPtr<FJsonValue>>& Args, FString& OutError,
+	                                   bool* bOutUsedEditorGuard)
 	{
 		if (!Target) { OutError = TEXT("null target"); return false; }
 		UFunction* Function = Target->FindFunction(FName(*FuncName));
@@ -181,7 +183,9 @@ namespace UEMCPPIE
 
 		if (bOk)
 		{
-			Target->ProcessEvent(Function, Params);
+			bool bUsedEditorGuard = false;
+			MCPFunctionCall::ProcessEventInOwnContext(Target, Function, Params, bUsedEditorGuard);
+			if (bOutUsedEditorGuard) *bOutUsedEditorGuard = bUsedEditorGuard;
 		}
 
 		for (TFieldIterator<FProperty> It(Function); It && It->HasAnyPropertyFlags(CPF_Parm); ++It)

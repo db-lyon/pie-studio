@@ -898,18 +898,8 @@ namespace UEMCPPIE
 			}
 			case FUatAction::EKind::Console:
 			{
-				UWorld* World = PIERemotePlayers::FindServerWorld();
-				if (!World) World = GEditor->PlayWorld;
-				APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
-				if (PC && PC->IsLocalController())
-				{
-					PC->ConsoleCommand(A.Command, true);
-				}
-				else if (World)
-				{
-					GEngine->Exec(World, *A.Command);
-				}
-				return World != nullptr;
+				UWorld* World = PIERemotePlayers::FindLocalPlayerWorld();
+				return !PIERemotePlayers::RunLocalConsole(World, A.Command).IsEmpty();
 			}
 			default:
 				return true;

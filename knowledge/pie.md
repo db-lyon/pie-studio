@@ -1,7 +1,7 @@
 # PIE Record / Replay / Observe / Profile
 
 pie-studio provisions the `pie` category: deterministic PIE recording, replay,
-observation, diffing, snapshots, input injection, session-error capture, viewport
+observation, diffing, input injection, session-error capture, replay viewport
 capture, profiling, and self-verifying reproduction tests. Actions are unprefixed -
 the category is the namespace. Targets Unreal Engine 5.8.
 
@@ -101,7 +101,7 @@ threshold) - a curve over time, not one value.
 
 `perf_summary(recording_dir)` aggregates the per-frame perf columns into frametime
 avg/p50/p99/max, avg game/render/gpu ms, peak memory, and the worst hitches with
-timestamps. `trace_start` / `trace_stop` capture an Unreal Insights `.utrace`.
+timestamps. Core's `editor(start_trace)` / `editor(stop_trace)` capture an Unreal Insights `.utrace`.
 
 ## Reproduction tests
 
@@ -113,8 +113,8 @@ contact sheet. `test_list` enumerates them. This is the reproduce -> verify-a-fi
 ## Input injection
 
 `inject_input` / `inject_input_start` / `inject_input_tape` drive Enhanced Input
-actions programmatically. `capture` grabs viewport frames on demand (decoupled from
-replay) so inject/observe flows are visual too.
+actions programmatically. For a viewport frame on demand (decoupled from replay), use
+core's `editor(capture_screenshot, target="pie")` or `editor(capture_scene_png, world="pie")`.
 
 ## Remote players and acceptance runs
 
@@ -122,7 +122,16 @@ Separate-process PIE clients (Run Under One Process off) are not reachable by
 `pie_instance`. Call `clients`; pass `client` (1..N) to `inject_input`,
 `inject_input_start`, `inject_input_tape` or `console` to drive that remote
 player through the game connection. `remote_result` confirms a relayed request
-was applied. `client` 0 (or omitted) targets the host.
+was applied. `client` 0 (or omitted) targets the host's local player console,
+the same path as `editor(execute_command, world="pie")`; prefer that core action
+when no remote players are involved.
+
+The pie actions `trace_start`, `trace_stop`, `capture`, `actor_spawn`, `actor_destroy`,
+`actor_set`, `actor_call`, `snapshot` and `subsystem_state` are deprecated and removed
+in the next release. To arrange live PIE actors outside a scenario, use core: `level(spawn_transient_actor,
+world="pie")`, `level(destroy_transient_actor)`, `editor(set_object_property)` and
+`editor(invoke_object_function)`. A scenario's `arrange` `call` step runs in the PIE
+instance that owns the actor, the same way `invoke_object_function` does.
 
 To verify multiplayer behaviour without a human, write a scenario and call
 `uat_run` (see the README): it opens the map, starts PIE, drives each step and

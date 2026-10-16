@@ -19,6 +19,25 @@
 DEFINE_LOG_CATEGORY(LogPIEStudio);
 IMPLEMENT_MODULE(FPIE_StudioModule, PIE_Studio)
 
+namespace
+{
+	// An action core now provides, kept for one release. Every result names the replacement.
+	UEMCP::FExternalHandlerFn Deprecated(UEMCP::FExternalHandlerFn Handler, const TCHAR* Replacement)
+	{
+		const FString Note = FString::Printf(TEXT("Deprecated: use %s. This pie action is removed in the next release."), Replacement);
+		return [Handler, Note](const TSharedPtr<FJsonObject>& Params) -> TSharedPtr<FJsonValue>
+		{
+			TSharedPtr<FJsonValue> Result = Handler(Params);
+			const TSharedPtr<FJsonObject>* Obj = nullptr;
+			if (Result.IsValid() && Result->TryGetObject(Obj) && Obj && Obj->IsValid())
+			{
+				(*Obj)->SetStringField(TEXT("deprecated"), Note);
+			}
+			return Result;
+		};
+	}
+}
+
 void FPIE_StudioModule::StartupModule()
 {
 	// The injector lives in PIE_StudioRuntime (so clients in their own process run it too); in the editor it resolves
@@ -83,7 +102,7 @@ void FPIE_StudioModule::StartupModule()
 
 	// Diff / Snapshot
 	UEMCP::RegisterExternalHandler(TEXT("record_diff"), &FGameplayHandlers::PieRecordDiff);
-	UEMCP::RegisterExternalHandler(TEXT("snapshot"), &FGameplayHandlers::PieSnapshot);
+	UEMCP::RegisterExternalHandler(TEXT("snapshot"), Deprecated(&FGameplayHandlers::PieSnapshot, TEXT("editor(get_object_properties, world=pie)")));
 
 	// Observation profiles
 	UEMCP::RegisterExternalHandler(TEXT("profile_create"), &FGameplayHandlers::PieProfileCreate);
@@ -103,16 +122,16 @@ void FPIE_StudioModule::StartupModule()
 	// PIE inspection
 	UEMCP::RegisterExternalHandler(TEXT("anim_state"), &FGameplayHandlers::GetPieAnimState);
 	UEMCP::RegisterExternalHandler(TEXT("anim_properties"), &FGameplayHandlers::GetPieAnimProperties);
-	UEMCP::RegisterExternalHandler(TEXT("subsystem_state"), &FGameplayHandlers::GetPieSubsystemState);
+	UEMCP::RegisterExternalHandler(TEXT("subsystem_state"), Deprecated(&FGameplayHandlers::GetPieSubsystemState, TEXT("editor(get_object_properties, target=subsystem)")));
 
 	// Session log / errors + standalone capture
 	UEMCP::RegisterExternalHandler(TEXT("session_errors"), &FGameplayHandlers::PieSessionErrors);
 	UEMCP::RegisterExternalHandler(TEXT("session_log"), &FGameplayHandlers::PieSessionLog);
-	UEMCP::RegisterExternalHandler(TEXT("capture"), &FGameplayHandlers::PieCapture);
+	UEMCP::RegisterExternalHandler(TEXT("capture"), Deprecated(&FGameplayHandlers::PieCapture, TEXT("editor(capture_screenshot, target=pie) or editor(capture_scene_png)")));
 
 	// Profiling
-	UEMCP::RegisterExternalHandler(TEXT("trace_start"), &FGameplayHandlers::PieTraceStart);
-	UEMCP::RegisterExternalHandler(TEXT("trace_stop"), &FGameplayHandlers::PieTraceStop);
+	UEMCP::RegisterExternalHandler(TEXT("trace_start"), Deprecated(&FGameplayHandlers::PieTraceStart, TEXT("editor(start_trace)")));
+	UEMCP::RegisterExternalHandler(TEXT("trace_stop"), Deprecated(&FGameplayHandlers::PieTraceStop, TEXT("editor(stop_trace)")));
 	UEMCP::RegisterExternalHandler(TEXT("perf_summary"), &FGameplayHandlers::PiePerfSummary);
 
 	// Reproduction tests
@@ -124,10 +143,10 @@ void FPIE_StudioModule::StartupModule()
 	UEMCP::RegisterExternalHandler(TEXT("assert_eval"), &FGameplayHandlers::PieAssertEval);
 
 	// Actor puppeteering (Roadmap v2, F1)
-	UEMCP::RegisterExternalHandler(TEXT("actor_spawn"), &FGameplayHandlers::PieActorSpawn);
-	UEMCP::RegisterExternalHandler(TEXT("actor_destroy"), &FGameplayHandlers::PieActorDestroy);
-	UEMCP::RegisterExternalHandler(TEXT("actor_set"), &FGameplayHandlers::PieActorSet);
-	UEMCP::RegisterExternalHandler(TEXT("actor_call"), &FGameplayHandlers::PieActorCall);
+	UEMCP::RegisterExternalHandler(TEXT("actor_spawn"), Deprecated(&FGameplayHandlers::PieActorSpawn, TEXT("level(spawn_transient_actor, world=pie)")));
+	UEMCP::RegisterExternalHandler(TEXT("actor_destroy"), Deprecated(&FGameplayHandlers::PieActorDestroy, TEXT("level(destroy_transient_actor)")));
+	UEMCP::RegisterExternalHandler(TEXT("actor_set"), Deprecated(&FGameplayHandlers::PieActorSet, TEXT("editor(set_object_property, world=pie)")));
+	UEMCP::RegisterExternalHandler(TEXT("actor_call"), Deprecated(&FGameplayHandlers::PieActorCall, TEXT("editor(invoke_object_function, world=pie)")));
 
 	// Declarative scenario (Roadmap v2, F2)
 	UEMCP::RegisterExternalHandler(TEXT("scenario_scaffold"), &FGameplayHandlers::PieScenarioScaffold);

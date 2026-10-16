@@ -1,5 +1,5 @@
 actionPrefix: "pie"
-minServerVersion: "1.3.0"    # MCPResolveActorToken / MCPResolveClass landed in the 1.3.0 bridge
+minServerVersion: "1.4.8-beta.1"    # MCPFunctionCall::ProcessEventInOwnContext / FMCPScopedPlayWorldContext landed in the 1.4.8-beta.1 bridge
 
 # All actions are implemented by the PIE_Studio C++ module, which registers
 # them on the bridge via UEMCP::RegisterExternalHandler. `nativeModule.category`
@@ -20,7 +20,7 @@ nativeModule:
   minBridgeApi: 1
   source: ue/Plugins/PIE_Studio
   category: pie
-  categoryDescription: "PIE test automation: record, replay, observe, diff, snapshot, and inject input during Play-In-Editor sessions"
+  categoryDescription: "PIE test automation: record, replay, observe, diff, and inject input during Play-In-Editor sessions"
   handlers:
 
     # ── Input injection ───────────────────────────────────────────
@@ -72,7 +72,7 @@ nativeModule:
       description: "List the players of a networked PIE session: client 0 is the editor's own player (listen server), clients 1..N are remote players in join order, including separate-process clients. ready=true once a client can run relayed requests"
       schema: {}
     console:
-      description: "Run a console command in a player's process: client 0 (default) the editor's play world, 1..N that remote player's own process"
+      description: "Run a console command in a player's process: 1..N relays to that remote player's own process. Client 0 (default) is the editor's local player console, run in its PIE instance exactly like editor(execute_command, world=pie), which is the core action to use when no remote players are involved"
       schema:
         command: { type: string, description: "Console command (required)" }
         client:  { type: number, description: "0 = editor's player, 1..N = remote player (default 0)" }
@@ -262,7 +262,7 @@ nativeModule:
 
     # ── Snapshot ──────────────────────────────────────────────────
     snapshot:
-      description: "Snapshot a PIE actor's full UProperty state to JSON"
+      description: "Deprecated: use editor(get_object_properties, world=pie). Kept for one release. Snapshot a PIE actor's full UProperty state to JSON"
       schema:
         target:             { type: string,  description: "Actor id to snapshot (required)" }
         include_components: { type: boolean, description: "Dump components too (default true)" }
@@ -272,24 +272,24 @@ nativeModule:
 
     # ── Actor puppeteering (Arrange: write the live world) ─────────
     actor_spawn:
-      description: "Spawn an actor in the live PIE world so an agent can Arrange a scenario. Returns a stable id (usable as target for actor_set/call/destroy and snapshot)."
+      description: "Deprecated: use level(spawn_transient_actor, world=pie). Kept for one release. Spawn an actor in the live PIE world so an agent can Arrange a scenario. Returns a stable id (usable as target for actor_set/call/destroy and snapshot)."
       schema:
         class:    { type: string, description: "Class path: native class or blueprint '/Game/.../BP_X.BP_X_C' (required)" }
         at:       { type: array,  description: "World location [x,y,z] (default origin)" }
         rotation: { type: array,  description: "Rotation [pitch,yaw,roll] (default 0)" }
         scale:    { type: array,  description: "Scale [x,y,z] (default 1)" }
     actor_destroy:
-      description: "Destroy a live PIE actor by id."
+      description: "Deprecated: use level(destroy_transient_actor, world=pie). Kept for one release. Destroy a live PIE actor by id."
       schema:
         target: { type: string, description: "Actor id (required)" }
     actor_set:
-      description: "Set a UProperty on a live PIE actor by dotted path (Component.Struct.Property), coerced through ImportText. This is the write half of snapshot's reflection read."
+      description: "Deprecated: use editor(set_object_property, world=pie). Kept for one release. Set a UProperty on a live PIE actor by dotted path (Component.Struct.Property), coerced through ImportText. This is the write half of snapshot's reflection read."
       schema:
         target: { type: string, description: "Actor id (required)" }
         path:   { type: string, description: "Dotted property path, e.g. Health or Movement.MaxWalkSpeed (required)" }
         value:  { type: string, description: "Value to write, as text: \"100\", \"true\", \"EMyEnum::Foo\", \"(X=1,Y=2)\" (required)" }
     actor_call:
-      description: "Invoke a callable UFUNCTION on a live PIE actor, importing args positionally into its parameters."
+      description: "Deprecated: use editor(invoke_object_function, world=pie). Kept for one release. Invoke a callable UFUNCTION on a live PIE actor, importing args positionally into its parameters. Runs in the PIE instance that owns the actor, like editor(invoke_object_function); callContext reports playInstance or editorScriptGuard, with world and pieInstance."
       schema:
         target: { type: string, description: "Actor id (required)" }
         func:   { type: string, description: "Function name (required)" }
@@ -395,7 +395,7 @@ nativeModule:
         actorLabel:    { type: string, description: "Actor label/name in PIE (required)" }
         propertyNames: { type: array,  description: "Specific property names (default: all)" }
     subsystem_state:
-      description: "Read UPROPERTY values on a running subsystem in PIE"
+      description: "Deprecated: use editor(get_object_properties, target=subsystem, subsystemClass). Kept for one release. Read UPROPERTY values on a running subsystem in PIE"
       schema:
         subsystemClass: { type: string, description: "Subsystem class short name or path (required)" }
         scope:          { type: string, description: "game | engine | world | localplayer (default game)" }
@@ -426,17 +426,17 @@ nativeModule:
         recording_id:  { type: string, description: "Recording id" }
         recording_dir: { type: string, description: "Recording folder (used directly when no id is given)" }
     trace_start:
-      description: "Start an Unreal Insights trace to a .utrace file. Returns the path to open in Unreal Insights. Call trace_stop to finish."
+      description: "Deprecated: use editor(start_trace). Kept for one release. Start an Unreal Insights trace to a .utrace file. Returns the path to open in Unreal Insights. Call trace_stop to finish."
       schema:
         channels:   { type: string, description: "Comma-separated trace channels (default cpu,frame,bookmark,stats,counters,gpu)" }
         output_dir: { type: string, description: "Destination dir (default Saved/MCPTraces)" }
         name:       { type: string, description: "Trace filename (default pie_<timestamp>.utrace)" }
     trace_stop:
-      description: "Stop the active Unreal Insights trace and report the .utrace path."
+      description: "Deprecated: use editor(stop_trace). Kept for one release. Stop the active Unreal Insights trace and report the .utrace path."
 
     # ── Standalone viewport capture ───────────────────────────────
     capture:
-      description: "Grab N viewport frames from the live PIE session now (decoupled from replay). Writes JPEGs plus a labeled contact sheet and returns their paths. Use to make observe/inject flows visual."
+      description: "Deprecated: use editor(capture_screenshot, target=pie) or editor(capture_scene_png, world=pie). Kept for one release. Grab N viewport frames from the live PIE session now (decoupled from replay). Writes JPEGs plus a labeled contact sheet and returns their paths. Use to make observe/inject flows visual."
       schema:
         frames:        { type: number, description: "How many frames to grab (default 1)" }
         every:         { type: number, description: "Grab one frame every N rendered frames (default 1)" }
