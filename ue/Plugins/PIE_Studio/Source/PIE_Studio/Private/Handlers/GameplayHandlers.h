@@ -17,7 +17,6 @@ public:
 	static TSharedPtr<FJsonValue> PieSessionLog(const TSharedPtr<FJsonObject>& Params);
 
 	// Standalone viewport capture
-	static TSharedPtr<FJsonValue> PieCapture(const TSharedPtr<FJsonObject>& Params);
 
 	// Profiling
 	static TSharedPtr<FJsonValue> PiePerfSummary(const TSharedPtr<FJsonObject>& Params);

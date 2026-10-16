@@ -113,8 +113,8 @@ contact sheet. `test_list` enumerates them. This is the reproduce -> verify-a-fi
 ## Input injection
 
 `inject_input` / `inject_input_start` / `inject_input_tape` drive Enhanced Input
-actions programmatically. `capture` grabs viewport frames on demand (decoupled from
-replay) so inject/observe flows are visual too.
+actions programmatically. For a viewport frame on demand (decoupled from replay), use
+core's `editor(capture_screenshot, target="pie")` or `editor(capture_scene_png, world="pie")`.
 
 ## Remote players and acceptance runs
 

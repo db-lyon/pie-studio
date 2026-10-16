@@ -108,7 +108,6 @@ void FPIE_StudioModule::StartupModule()
 	// Session log / errors + standalone capture
 	UEMCP::RegisterExternalHandler(TEXT("session_errors"), &FGameplayHandlers::PieSessionErrors);
 	UEMCP::RegisterExternalHandler(TEXT("session_log"), &FGameplayHandlers::PieSessionLog);
-	UEMCP::RegisterExternalHandler(TEXT("capture"), &FGameplayHandlers::PieCapture);
 
 	// Profiling
 	UEMCP::RegisterExternalHandler(TEXT("perf_summary"), &FGameplayHandlers::PiePerfSummary);
@@ -209,7 +208,6 @@ void FPIE_StudioModule::ShutdownModule()
 	UEMCP::UnregisterExternalHandler(TEXT("subsystem_state"));
 	UEMCP::UnregisterExternalHandler(TEXT("session_errors"));
 	UEMCP::UnregisterExternalHandler(TEXT("session_log"));
-	UEMCP::UnregisterExternalHandler(TEXT("capture"));
 	UEMCP::UnregisterExternalHandler(TEXT("perf_summary"));
 	UEMCP::UnregisterExternalHandler(TEXT("test_scaffold"));
 	UEMCP::UnregisterExternalHandler(TEXT("test_run"));

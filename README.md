@@ -116,7 +116,7 @@ When `capture_frame_every` is set, replay grabs viewport frames as **JPEGs** (ke
 
 Animated GIF is now **opt-in** (`encode_gif=true`). A vision model cannot parse GIF animation, so it is off by default and exists only for human eyeballing.
 
-`capture` grabs frames from the live PIE viewport on demand, decoupled from replay, so observe and inject flows can be visual too.
+For a frame of the live PIE viewport on demand, decoupled from replay, use core's `editor(capture_screenshot, target="pie")` or `editor(capture_scene_png, world="pie")`.
 
 ## Session Errors
 
@@ -153,7 +153,6 @@ pie(action="record_read", id="some-recording", file="drift")
 - **Diff / Snapshot** — `record_diff`, `snapshot`
 - **PIE inspection** — `anim_state`, `anim_properties`, `subsystem_state`
 - **Session log** — `session_errors`, `session_log`
-- **Capture** — `capture` (standalone viewport frames + contact sheet)
 
 ## Data Layout
 
