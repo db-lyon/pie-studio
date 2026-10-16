@@ -26,7 +26,7 @@ PIE Studio adds a toolbar button group to the UE5 editor (next to the Play contr
 
 **Recorder** — status display showing current state, recording ID, frame count, and elapsed time.
 
-**Time Scale** — slider and quick-set buttons (1%, 10%, 25%, 50%, 100%, 200%) to control PIE playback speed. Persists across PIE restarts.
+**Time Scale** — slider and quick-set buttons (1%, 10%, 25%, 50%, 100%, 200%) to control PIE playback speed. Persists across PIE restarts. From an agent, use core's `editor(set_pie_time_scale)`.
 
 **Recordings** — lists all saved recordings with:
 - Play button to replay (arms replayer + active observation profiles, starts PIE, captures viewport frames, generates GIF)
@@ -137,7 +137,7 @@ pie(action="record_read", id="some-recording", file="drift")
 
 ## MCP Actions
 
-58 actions in the `pie` category (provisioned by the plugin; call as `pie(action="...")`):
+49 actions in the `pie` category (provisioned by the plugin; call as `pie(action="...")`):
 
 - **Recording** — `record_arm`, `record_disarm`, `record_stop`, `record_status`, `record_list`, `record_read`, `record_delete`, `mark`
 - **Replay** — `replay_arm`, `replay_run` (unattended), `replay_disarm`, `replay_stop`, `replay_status` with drift tracking and viewport capture
