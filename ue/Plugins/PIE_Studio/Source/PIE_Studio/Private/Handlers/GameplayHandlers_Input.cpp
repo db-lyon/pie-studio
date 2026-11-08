@@ -18,6 +18,15 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Subsystems/WorldSubsystem.h"
 
+// actorLabel matches label then object name; ambiguity is refused.
+static FMCPActorSelector PieActorSelector()
+{
+	FMCPActorSelector Selector;
+	Selector.Match = EMCPActorMatch::LabelOrName;
+	Selector.WorldLabel = TEXT("PIE");
+	return Selector;
+}
+
 // ─────────────────────────────────────────────────────────────
 // get_pie_anim_state
 // ─────────────────────────────────────────────────────────────
@@ -34,11 +43,9 @@ TSharedPtr<FJsonValue> FGameplayHandlers::GetPieAnimState(const TSharedPtr<FJson
 
 	UWorld* PIEWorld = PIEContext->World();
 
-	AActor* FoundActor = FindActorByLabelOrName(PIEWorld, ActorLabel);
-	if (!FoundActor)
-	{
-		return MCPError(FString::Printf(TEXT("Actor not found in PIE: %s"), *ActorLabel));
-	}
+	TSharedPtr<FJsonValue> ResolveErr;
+	AActor* FoundActor = MCPResolveActorToken(PIEWorld, ActorLabel, ResolveErr, PieActorSelector());
+	if (!FoundActor) return ResolveErr;
 
 	USkeletalMeshComponent* SkelMesh = FoundActor->FindComponentByClass<USkeletalMeshComponent>();
 	if (!SkelMesh)
@@ -110,8 +117,9 @@ TSharedPtr<FJsonValue> FGameplayHandlers::GetPieAnimProperties(const TSharedPtr<
 		return MCPError(TEXT("No PIE world available. Is Play-In-Editor running?"));
 	}
 
-	AActor* FoundActor = FindActorByLabelOrName(PIEWorld, ActorLabel);
-	if (!FoundActor) return MCPError(FString::Printf(TEXT("Actor not found in PIE: %s"), *ActorLabel));
+	TSharedPtr<FJsonValue> ResolveErr;
+	AActor* FoundActor = MCPResolveActorToken(PIEWorld, ActorLabel, ResolveErr, PieActorSelector());
+	if (!FoundActor) return ResolveErr;
 
 	USkeletalMeshComponent* SkelMesh = FoundActor->FindComponentByClass<USkeletalMeshComponent>();
 	if (!SkelMesh) return MCPError(TEXT("Actor has no SkeletalMeshComponent"));
@@ -188,7 +196,7 @@ TSharedPtr<FJsonValue> FGameplayHandlers::GetPieSubsystemState(const TSharedPtr<
 	}
 	if (!SubClass)
 	{
-		SubClass = FindClassByShortName(SubsystemClassName);
+		SubClass = MCPResolveClass(SubsystemClassName);
 	}
 	if (!SubClass) return MCPError(FString::Printf(TEXT("Subsystem class not found: %s"), *SubsystemClassName));
 

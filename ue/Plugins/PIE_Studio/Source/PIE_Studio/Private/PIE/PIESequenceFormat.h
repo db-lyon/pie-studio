@@ -18,7 +18,7 @@ class AActor;
  *   - recording.csv   Per-frame samples for analysis (pandas/jq friendly)
  *   - drift.json      Per-frame deltas vs source recording (only after a replay)
  *
- * Schema is versioned at the top of every JSON file. The current version is 1.
+ * Schema is versioned at the top of every JSON file. The current version is 2.
  *
  * This header defines the in-memory structs and pure read/write helpers. There
  * are no UObject lifetimes here; safe to call from any thread that owns its
@@ -75,7 +75,9 @@ namespace UEMCPPIE
 		int64 RngSeed = 0;
 		FString PIEWorld;
 		FString PawnClass;
+		// Local-player index inside recorded PIEInstance-selected world.
 		int32 ClientId = 0;
+		int32 PIEInstance = INDEX_NONE;
 		float AxisThreshold = 0.15f;
 		TArray<FActionSpec> Actions;
 		TArray<FTrackedValueSpec> TrackedValues;

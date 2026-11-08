@@ -26,7 +26,9 @@ namespace UEMCPPIE
 		FString OutputDir;
 		int32 SampleHz = 60;
 		int32 PinFPS = -1;
+		// Local-player index inside selected PIEInstance.
 		int32 ClientId = 0;
+		int32 PIEInstance = INDEX_NONE;
 	};
 
 	struct FObserverStatus
@@ -36,6 +38,7 @@ namespace UEMCPPIE
 		FString ProfilePath;
 		int32 FramesSampled = 0;
 		double ElapsedSeconds = 0.0;
+		FString LastError;
 	};
 
 	struct FObserverFinishResult
@@ -58,6 +61,11 @@ namespace UEMCPPIE
 		FString OutputDir;
 		FString ProfilePath;
 
+		TWeakObjectPtr<UWorld> TargetWorld;
+		int32 ResolvedPIEInstance = INDEX_NONE;
+		bool bTargetResolved = false;
+		double TargetResolveStartSeconds = 0.0;
+		FString TargetResolveError;
 		FPIEFrameSampler Sampler;
 		FCSVHeader CSVHdr;
 		FString CSVHeaderStr;
@@ -126,6 +134,7 @@ namespace UEMCPPIE
 		void UnbindEndFrame();
 
 		TArray<FObservationSession> Sessions;
+		FString LastError;
 
 		FDelegateHandle BeginPIEHandle;
 		FDelegateHandle EndPIEHandle;

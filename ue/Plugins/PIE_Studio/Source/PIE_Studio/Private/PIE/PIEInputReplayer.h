@@ -8,8 +8,8 @@
 class UWorld;
 class AActor;
 class APlayerController;
+class ULocalPlayer;
 class APawn;
-
 /**
  * PIE replayer: drives a previously-recorded sequence.json (or an inline
  * step array) through the input injection pipeline and samples drift
@@ -53,9 +53,11 @@ namespace UEMCPPIE
 		// default: a vision model cannot parse GIF animation, so the frames + the
 		// contact sheet are the useful artifacts. GIF is for human eyeballing.
 		bool bEncodeGif = false;
-		// Multi-client PIE: which local player to drive injections / sample
-		// for drift. 0 = first (default), 1+ selects subsequent local players.
+		// Selected PIE world and local-player index. PIEInstance >= 0 selects
+		// exact FWorldContext::PIEInstance; INDEX_NONE prefers active PlayWorld
+		// when eligible, then first eligible PIE/Game world.
 		int32 ClientId = 0;
+		int32 PIEInstance = INDEX_NONE;
 		float ThrPosCm = 5.0f;
 		float ThrRotDeg = 2.0f;
 		float ThrVelCms = 25.0f;
@@ -86,6 +88,7 @@ namespace UEMCPPIE
 		// True while a PIE session is live. Lets an unattended caller that
 		// kicked off replay_run poll until PIE has torn itself down.
 		bool bPIEActive = false;
+		FString LastError;
 		// Snapshot of the most recent finished replay, retained after the
 		// replayer returns to Idle so a poller can read the outcome (drift
 		// report path + peak drift) without racing the finalize.
@@ -189,6 +192,13 @@ namespace UEMCPPIE
 		FString CurrentDriftPath;
 		TArray<FSourceFrame> SourceFrames;
 		FPIEFrameSampler Sampler;
+		TWeakObjectPtr<UWorld> TargetWorld;
+		TWeakObjectPtr<APlayerController> TargetPlayerController;
+		TWeakObjectPtr<ULocalPlayer> TargetLocalPlayer;
+		int32 ResolvedPIEInstance = INDEX_NONE;
+		bool bTargetResolved = false;
+		double TargetResolveStartSeconds = 0.0;
+		FString TargetResolveError;
 
 		double AttachTime = 0.0;
 		int32 NextStepIndex = 0;
@@ -198,6 +208,7 @@ namespace UEMCPPIE
 		// Active hold lifecycles: maps "step <i> stop time ms" -> injection id.
 		struct FHoldHandle { int32 StepIndex; double StopAtMs; FString InjectionId; };
 		TArray<FHoldHandle> ActiveHolds;
+		TArray<FString> ActiveTapes;
 
 		// Drift accumulators
 		TArray<FDriftFrameEntry> DriftFrames;

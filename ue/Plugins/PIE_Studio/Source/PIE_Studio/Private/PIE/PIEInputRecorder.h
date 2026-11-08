@@ -51,9 +51,11 @@ namespace UEMCPPIE
 		// Requires the Take Recorder plugin + an open panel; falls back to
 		// a no-op with a diagnostic in TakeRecorderStatus otherwise.
 		bool bTakeRecord = false;
-		// Multi-client PIE: which local player to sample. 0 = first
-		// (single-client default), 1+ selects subsequent local players.
+		// Selected PIE world and local-player index. PIEInstance >= 0 selects
+		// exact FWorldContext::PIEInstance; INDEX_NONE prefers active PlayWorld
+		// when eligible, then first eligible PIE/Game world.
 		int32 ClientId = 0;
+		int32 PIEInstance = INDEX_NONE;
 		float AxisThreshold = 0.15f;
 		int32 SampleHz = 60;
 		int32 PinFPS = 60;                // 0 to skip the t.MaxFPS pin
@@ -72,6 +74,7 @@ namespace UEMCPPIE
 		int32 CurrentFrame = 0;
 		double ElapsedSeconds = 0.0;
 		int32 TrackedActionCount = 0;
+		FString LastError;
 	};
 
 	struct FRecorderFinishResult
@@ -134,6 +137,12 @@ namespace UEMCPPIE
 		bool bArmed = false;
 		ERecorderState State = ERecorderState::Idle;
 		FPIEFrameSampler Sampler;
+		TWeakObjectPtr<UWorld> TargetWorld;
+		int32 ResolvedPIEInstance = INDEX_NONE;
+		bool bTargetResolved = false;
+		double TargetResolveStartSeconds = 0.0;
+		FString TargetResolveError;
+		FString LastError;
 		FString CurrentId;
 		FString CurrentDir;
 		FString CSVHeader;

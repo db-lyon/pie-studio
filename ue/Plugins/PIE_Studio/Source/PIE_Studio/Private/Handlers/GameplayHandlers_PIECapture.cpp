@@ -5,7 +5,7 @@
 
 #include "GameplayHandlers.h"
 #include "HandlerUtils.h"
-#include "PIE/PIEViewportCapture.h"
+#include "PIEViewportCapture.h"
 #include "PIE/PIEContactSheet.h"
 #include "Editor.h"
 #include "Editor/EditorEngine.h"

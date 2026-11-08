@@ -41,6 +41,10 @@ namespace
 		// session has ended; when it flips false and last_result is present the
 		// drift report on disk is finalized and safe to read.
 		R->SetBoolField(TEXT("pie_active"), S.bPIEActive);
+		if (!S.LastError.IsEmpty())
+		{
+			R->SetStringField(TEXT("last_error"), S.LastError);
+		}
 		if (S.bHasLastResult)
 		{
 			TSharedPtr<FJsonObject> Last = MakeShared<FJsonObject>();
@@ -63,6 +67,13 @@ namespace
 	// lockstep on every knob.
 	bool ParseReplayArmConfig(const TSharedPtr<FJsonObject>& Params, FReplayerArmConfig& Cfg, TSharedPtr<FJsonValue>& OutErr)
 	{
+		int32 PIEInstance = INDEX_NONE;
+		FString PIEInstanceError;
+		if (!FGameplayHandlers::ParsePIEInstance(Params, PIEInstance, PIEInstanceError))
+		{
+			OutErr = MCPError(PIEInstanceError);
+			return false;
+		}
 		Cfg.SourceRecordingId = OptionalString(Params, TEXT("recording_id"));
 		Cfg.SequencePath = OptionalString(Params, TEXT("sequence_path"));
 		Cfg.SourceDir = OptionalString(Params, TEXT("recording_dir"));
@@ -131,6 +142,8 @@ namespace
 			Params->TryGetNumberField(TEXT("client_id"), D);
 			Cfg.ClientId = FMath::Max(0, static_cast<int32>(D));
 		}
+		Cfg.PIEInstance = PIEInstance;
+
 
 		const TSharedPtr<FJsonObject>* Thr = nullptr;
 		if (Params->TryGetObjectField(TEXT("drift_thresholds"), Thr) && Thr)

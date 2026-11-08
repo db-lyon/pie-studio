@@ -23,8 +23,9 @@ class UWorld;
  *
  * Lifecycle (per session):
  *   1. SetConfig(actions whitelist, tracked paths, axis_threshold)
- *   2. AttachToPIE(world) — discover actions, capture pawn class. Returns
- *      false until the pawn and its EnhancedInputComponent exist.
+ *   2. AttachToPIE(world) — resolve the configured local player in supplied
+ *      world, discover actions, capture pawn class. Returns false until the
+ *      pawn and its EnhancedInputComponent exist.
  *   3. SampleFrame(...) once per end-of-frame.
  *   4. Reset() between sessions.
  */
@@ -43,9 +44,8 @@ namespace UEMCPPIE
 			float AxisThreshold = 0.15f;
 			bool bCapturePawnState = true;
 			bool bCaptureMontage = true;
-			// Local player to sample. 0 = first player controller (the legacy
-			// single-client behaviour); 1+ selects subsequent local players in
-			// multi-player PIE sessions (UGameInstance::GetLocalPlayers order).
+			// Local player index inside selected PIEInstance. 0 is the first
+			// local player; 1+ selects subsequent local players.
 			int32 ClientIndex = 0;
 		};
 

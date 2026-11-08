@@ -38,6 +38,10 @@ namespace
 		R->SetStringField(TEXT("profile"), S.ProfilePath);
 		R->SetNumberField(TEXT("frames_sampled"), S.FramesSampled);
 		R->SetNumberField(TEXT("elapsed_seconds"), S.ElapsedSeconds);
+		if (!S.LastError.IsEmpty())
+		{
+			R->SetStringField(TEXT("last_error"), S.LastError);
+		}
 	}
 
 	void ProfileToJson(const UMCPObservationProfile* P, TSharedPtr<FJsonObject> R)
@@ -295,6 +299,12 @@ TSharedPtr<FJsonValue> FGameplayHandlers::PieProfileList(const TSharedPtr<FJsonO
 TSharedPtr<FJsonValue> FGameplayHandlers::PieObserveArm(const TSharedPtr<FJsonObject>& Params)
 {
 	MCP_CHECK_GAME_THREAD();
+	int32 PIEInstance = INDEX_NONE;
+	FString PIEInstanceError;
+	if (!FGameplayHandlers::ParsePIEInstance(Params, PIEInstance, PIEInstanceError))
+	{
+		return MCPError(PIEInstanceError);
+	}
 	FString ProfilePath;
 	if (auto Err = RequireString(Params, TEXT("profile"), ProfilePath)) return Err;
 
@@ -303,6 +313,8 @@ TSharedPtr<FJsonValue> FGameplayHandlers::PieObserveArm(const TSharedPtr<FJsonOb
 	Cfg.OutputDir = OptionalString(Params, TEXT("output_dir"));
 	Cfg.SampleHz = OptionalInt(Params, TEXT("sample_hz"), 60);
 	Cfg.ClientId = OptionalInt(Params, TEXT("client_id"), 0);
+	Cfg.PIEInstance = PIEInstance;
+
 
 	if (Params->HasField(TEXT("pin_fps")))
 	{

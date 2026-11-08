@@ -8,12 +8,14 @@
 #include "GameFramework/Actor.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformFileManager.h"
+#include "HAL/PlatformTime.h"
 #include "Misc/CoreDelegates.h"
 #include "Misc/DateTime.h"
 #include "Misc/Paths.h"
 #include "Math/UnrealMathUtility.h"
 #include "Containers/StringConv.h"
 #include "UObject/WeakObjectPtrTemplates.h"
+#include "PIEWorldResolver.h"
 
 namespace UEMCPPIE
 {
@@ -47,6 +49,8 @@ namespace UEMCPPIE
 				OutRow.Actors.Add(Id, S);
 			}
 		}
+
+		constexpr double RecorderTargetResolveTimeoutSeconds = 10.0;
 	}
 
 	FPIEInputRecorder& FPIEInputRecorder::Get()
@@ -82,6 +86,12 @@ namespace UEMCPPIE
 		bEndFrameBound = false;
 		State = ERecorderState::Idle;
 		bArmed = false;
+		TargetWorld.Reset();
+		ResolvedPIEInstance = INDEX_NONE;
+		bTargetResolved = false;
+		TargetResolveStartSeconds = 0.0;
+		TargetResolveError.Reset();
+		LastError.Reset();
 		Rows.Reset();
 		Markers.Reset();
 	}
@@ -95,6 +105,9 @@ namespace UEMCPPIE
 		}
 
 		Pending = Cfg;
+		TargetResolveStartSeconds = 0.0;
+		TargetResolveError.Reset();
+		LastError.Reset();
 		if (!Pending.bUserSuppliedSeed || Pending.RngSeed == 0)
 		{
 			Pending.RngSeed = FDateTime::Now().GetTicks() & 0x7FFFFFFF;
@@ -107,8 +120,6 @@ namespace UEMCPPIE
 		OutMessage = FString::Printf(TEXT("Armed: id=%s dir=%s seed=%lld"),
 			*CurrentId, *CurrentDir, static_cast<long long>(Pending.RngSeed));
 
-		// If PIE is already running, transition straight to WaitingForPawn so
-		// the next end-of-frame begins sampling without a fresh BeginPIE.
 		if (GEditor && GEditor->PlayWorld)
 		{
 			OnBeginPIE(false);
@@ -136,6 +147,11 @@ namespace UEMCPPIE
 	{
 		if (!bArmed) return;
 		bArmed = false;
+		TargetWorld.Reset();
+		ResolvedPIEInstance = INDEX_NONE;
+		bTargetResolved = false;
+		TargetResolveStartSeconds = FPlatformTime::Seconds();
+		TargetResolveError.Reset();
 
 		FPIEFrameSampler::FConfig SC;
 		SC.ActionPaths       = Pending.ActionPaths;
@@ -187,8 +203,29 @@ namespace UEMCPPIE
 	void FPIEInputRecorder::OnEndFrame()
 	{
 		if (State == ERecorderState::Idle) return;
-		UWorld* PIEWorld = nullptr;
-		if (GEditor) PIEWorld = GEditor->PlayWorld;
+
+		UWorld* PIEWorld = TargetWorld.Get();
+		if (!bTargetResolved)
+		{
+			PIEWorldResolver::FPlayerTarget Target;
+			FString Error;
+			if (!PIEWorldResolver::ResolvePlayer(Pending.PIEInstance, Pending.ClientId, Target, Error))
+			{
+				TargetResolveError = Error;
+				if (TargetResolveStartSeconds > 0.0
+					&& FPlatformTime::Seconds() - TargetResolveStartSeconds >= RecorderTargetResolveTimeoutSeconds)
+				{
+					FinaliseCurrent();
+				}
+				return;
+			}
+			TargetWorld = Target.World;
+			ResolvedPIEInstance = Target.PIEInstance;
+			bTargetResolved = true;
+			TargetResolveError.Reset();
+			PIEWorld = Target.World;
+		}
+
 		if (!PIEWorld) return;
 
 		if (State == ERecorderState::WaitingForPawn)
@@ -392,9 +429,28 @@ namespace UEMCPPIE
 		if (!bHadData)
 		{
 			UE_LOG(LogPIEStudio, Log, TEXT("[PIE-REC] EndPIE without samples (id=%s)"), *CurrentId);
-			R.bSuccess = true;
+			const bool bTargetFailed = !bTargetResolved && !TargetResolveError.IsEmpty();
+			R.bSuccess = !bTargetFailed;
+			if (bTargetFailed)
+			{
+				R.Error = TargetResolveError;
+				LastError = R.Error;
+			}
+			else
+			{
+				LastError.Reset();
+			}
 			R.TotalFrames = 0;
 			R.DurationSeconds = 0.0;
+			if (Pending.bTakeRecord)
+			{
+				FString TakeMsg;
+				const bool bStopped = TakeRecorderBridge::StopFromPanel(TakeMsg);
+				R.bTakeRecordAttempted = true;
+				R.TakeRecorderStatus = bStopped
+					? FString::Printf(TEXT("stopped: %s"), *TakeMsg)
+					: FString::Printf(TEXT("skipped: %s"), *TakeMsg);
+			}
 
 			if (bEndFrameBound && OnEndFrameHandle.IsValid())
 			{
@@ -409,6 +465,11 @@ namespace UEMCPPIE
 			ActorRows.Reset();
 			TrackedActorCache.Reset();
 			Markers.Reset();
+			TargetWorld.Reset();
+			ResolvedPIEInstance = INDEX_NONE;
+			bTargetResolved = false;
+			TargetResolveStartSeconds = 0.0;
+			TargetResolveError.Reset();
 			return R;
 		}
 
@@ -423,6 +484,7 @@ namespace UEMCPPIE
 		if (!SaveCSV(CSVPath, FullCSV, WriteErr))
 		{
 			R.Error = WriteErr;
+			LastError = R.Error;
 			State = ERecorderState::Idle;
 			return R;
 		}
@@ -432,6 +494,7 @@ namespace UEMCPPIE
 		if (!SaveSequence(SeqPath, Seq, WriteErr))
 		{
 			R.Error = WriteErr;
+			LastError = R.Error;
 			State = ERecorderState::Idle;
 			return R;
 		}
@@ -447,14 +510,15 @@ namespace UEMCPPIE
 		M.RngSeed = Pending.RngSeed;
 		M.PIEWorld = Sampler.GetPIEWorldPath();
 		M.PawnClass = Sampler.GetPawnClassPath();
+		M.PIEInstance = ResolvedPIEInstance;
+		M.ClientId = Pending.ClientId;
 		M.AxisThreshold = Pending.AxisThreshold;
+		M.TrackedActorIds = Pending.TrackedActorIds;
 		M.Actions = Sampler.GetActions();
 		M.TrackedValues = Sampler.GetTrackedValues();
 		M.Markers = Markers;
 		M.CSVFile = TEXT("recording.csv");
 		M.SequenceFile = TEXT("sequence.json");
-		M.TrackedActorIds = Pending.TrackedActorIds;
-		M.ClientId = Pending.ClientId;
 
 		if (ActorRows.Num() > 0)
 		{
@@ -472,11 +536,13 @@ namespace UEMCPPIE
 		if (!SaveManifest(ManPath, M, WriteErr))
 		{
 			R.Error = WriteErr;
+			LastError = R.Error;
 			State = ERecorderState::Idle;
 			return R;
 		}
 
 		R.bSuccess = true;
+		LastError.Reset();
 		R.ManifestPath = ManPath;
 		R.CSVPath = CSVPath;
 		R.SequencePath = SeqPath;
@@ -516,6 +582,11 @@ namespace UEMCPPIE
 		ActorRows.Reset();
 		TrackedActorCache.Reset();
 		Markers.Reset();
+		TargetWorld.Reset();
+		ResolvedPIEInstance = INDEX_NONE;
+		bTargetResolved = false;
+		TargetResolveStartSeconds = 0.0;
+		TargetResolveError.Reset();
 		return R;
 	}
 
@@ -533,6 +604,7 @@ namespace UEMCPPIE
 		S.CurrentFrame = Rows.Num();
 		S.ElapsedSeconds = (Rows.Num() >= 2) ? (Rows.Last().Time - Rows[0].Time) : 0.0;
 		S.TrackedActionCount = Sampler.GetActions().Num();
+		S.LastError = LastError;
 		return S;
 	}
 

@@ -32,20 +32,11 @@ public:
 	// Assertion layer (Roadmap v2, Phase A)
 	static TSharedPtr<FJsonValue> PieAssertEval(const TSharedPtr<FJsonObject>& Params);
 
-	// Per-tick actor telemetry (#954)
-	static TSharedPtr<FJsonValue> PieTelemetryStart(const TSharedPtr<FJsonObject>& Params);
-	static TSharedPtr<FJsonValue> PieTelemetryStatus(const TSharedPtr<FJsonObject>& Params);
-	static TSharedPtr<FJsonValue> PieTelemetryStop(const TSharedPtr<FJsonObject>& Params);
-
 	// Actor puppeteering (Roadmap v2, F1)
 	static TSharedPtr<FJsonValue> PieActorSpawn(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> PieActorDestroy(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> PieActorSet(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> PieActorCall(const TSharedPtr<FJsonObject>& Params);
-
-	// Orchestration: ordered steps and bounded loops in one dispatch (#955, #960)
-	static TSharedPtr<FJsonValue> PieRunSequence(const TSharedPtr<FJsonObject>& Params);
-	static TSharedPtr<FJsonValue> PieSampleLoop(const TSharedPtr<FJsonObject>& Params);
 
 	// Declarative scenario (Roadmap v2, F2)
 	static TSharedPtr<FJsonValue> PieScenarioScaffold(const TSharedPtr<FJsonObject>& Params);
@@ -57,6 +48,19 @@ public:
 	static TSharedPtr<FJsonValue> InjectInputUpdate(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> InjectInputStop(const TSharedPtr<FJsonObject>& Params);
 	static TSharedPtr<FJsonValue> InjectInputTape(const TSharedPtr<FJsonObject>& Params);
+
+	// Multiplayer players
+	static TSharedPtr<FJsonValue> PieClients(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieConsole(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieRemoteResult(const TSharedPtr<FJsonObject>& Params);
+
+	// Multiplayer acceptance runs
+	static TSharedPtr<FJsonValue> PieUatRun(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieUatStatus(const TSharedPtr<FJsonObject>& Params);
+	static TSharedPtr<FJsonValue> PieUatAbort(const TSharedPtr<FJsonObject>& Params);
+	// Shared selector parsing for handlers that target a PIE instance.
+	static bool ParsePIEInstance(const TSharedPtr<FJsonObject>& Params,
+		int32& OutPIEInstance, FString& OutError);
 
 	// Recording
 	static TSharedPtr<FJsonValue> PieRecordArm(const TSharedPtr<FJsonObject>& Params);

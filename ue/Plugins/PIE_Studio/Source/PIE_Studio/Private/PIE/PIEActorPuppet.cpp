@@ -2,7 +2,6 @@
 #include "GameFramework/Actor.h"
 #include "Components/ActorComponent.h"
 #include "Engine/World.h"
-#include "JsonObjectConverter.h"
 #include "UObject/UnrealType.h"
 #include "UObject/Class.h"
 
@@ -37,14 +36,9 @@ namespace UEMCPPIE
 		}
 	}
 
-	bool FPIEActorPuppet::ResolvePath(UObject* Root, const FString& Path,
-	                                  FProperty*& OutProperty, void*& OutContainer,
-	                                  UObject*& OutOwner, FString& OutError)
+	bool FPIEActorPuppet::SetPropertyByPath(UObject* Root, const FString& Path,
+	                                        const TSharedPtr<FJsonValue>& Value, FString& OutError)
 	{
-		OutProperty = nullptr;
-		OutContainer = nullptr;
-		OutOwner = nullptr;
-
 		if (!Root) { OutError = TEXT("null root object"); return false; }
 		if (Path.IsEmpty()) { OutError = TEXT("empty property path"); return false; }
 
@@ -115,23 +109,9 @@ namespace UEMCPPIE
 
 		if (!Property) { OutError = TEXT("could not resolve leaf property"); return false; }
 
-		OutProperty = Property;
-		OutContainer = CurrentContainer;
-		OutOwner = OwnerObject;
-		return true;
-	}
-
-	bool FPIEActorPuppet::SetPropertyByPath(UObject* Root, const FString& Path,
-	                                        const TSharedPtr<FJsonValue>& Value, FString& OutError)
-	{
-		FProperty* Property = nullptr;
-		void* Container = nullptr;
-		UObject* Owner = nullptr;
-		if (!ResolvePath(Root, Path, Property, Container, Owner, OutError)) return false;
-
-		void* ValuePtr = Property->ContainerPtrToValuePtr<void>(Container);
+		void* ValuePtr = Property->ContainerPtrToValuePtr<void>(CurrentContainer);
 		const FString ImportStr = JsonToImportString(Value);
-		const TCHAR* Result = Property->ImportText_Direct(*ImportStr, ValuePtr, Owner, PPF_None);
+		const TCHAR* Result = Property->ImportText_Direct(*ImportStr, ValuePtr, OwnerObject, PPF_None);
 		if (Result == nullptr)
 		{
 			OutError = FString::Printf(TEXT("could not coerce '%s' into %s (%s)"),
@@ -139,52 +119,6 @@ namespace UEMCPPIE
 			return false;
 		}
 		return true;
-	}
-
-	bool FPIEActorPuppet::GetPropertyByPath(UObject* Root, const FString& Path,
-	                                        TSharedPtr<FJsonValue>& OutValue, FString& OutError)
-	{
-		FProperty* Property = nullptr;
-		void* Container = nullptr;
-		UObject* Owner = nullptr;
-		if (!ResolvePath(Root, Path, Property, Container, Owner, OutError)) return false;
-
-		const void* ValuePtr = Property->ContainerPtrToValuePtr<void>(Container);
-		OutValue = FJsonObjectConverter::UPropertyToJsonValue(Property, ValuePtr);
-		if (!OutValue.IsValid())
-		{
-			OutError = FString::Printf(TEXT("could not render %s (%s) as JSON"),
-				*Property->GetName(), *Property->GetClass()->GetName());
-			return false;
-		}
-		return true;
-	}
-
-	UObject* FPIEActorPuppet::ResolveObjectByPath(UObject* Root, const FString& Path, FString& OutError)
-	{
-		if (!Root) { OutError = TEXT("null root object"); return nullptr; }
-		if (Path.IsEmpty()) return Root;
-
-		FProperty* Property = nullptr;
-		void* Container = nullptr;
-		UObject* Owner = nullptr;
-		if (!ResolvePath(Root, Path, Property, Container, Owner, OutError)) return nullptr;
-
-		FObjectPropertyBase* OP = CastField<FObjectPropertyBase>(Property);
-		if (!OP)
-		{
-			OutError = FString::Printf(TEXT("'%s' is %s, not an object reference"),
-				*Property->GetName(), *Property->GetClass()->GetName());
-			return nullptr;
-		}
-
-		UObject* Found = OP->GetObjectPropertyValue(OP->ContainerPtrToValuePtr<void>(Container));
-		if (!Found)
-		{
-			OutError = FString::Printf(TEXT("'%s' is null"), *Path);
-			return nullptr;
-		}
-		return Found;
 	}
 
 	AActor* FPIEActorPuppet::SpawnActor(UWorld* World, const FString& ClassPath,
@@ -216,16 +150,6 @@ namespace UEMCPPIE
 	bool FPIEActorPuppet::CallFunction(UObject* Target, const FString& FuncName,
 	                                   const TArray<TSharedPtr<FJsonValue>>& Args, FString& OutError)
 	{
-		TSharedPtr<FJsonValue> Unused;
-		return CallFunctionWithResult(Target, FuncName, Args, Unused, OutError);
-	}
-
-	bool FPIEActorPuppet::CallFunctionWithResult(UObject* Target, const FString& FuncName,
-	                                             const TArray<TSharedPtr<FJsonValue>>& Args,
-	                                             TSharedPtr<FJsonValue>& OutReturn, FString& OutError,
-	                                             UObject** OutReturnObject)
-	{
-		if (OutReturnObject) *OutReturnObject = nullptr;
 		if (!Target) { OutError = TEXT("null target"); return false; }
 		UFunction* Function = Target->FindFunction(FName(*FuncName));
 		if (!Function) { OutError = FString::Printf(TEXT("function '%s' not found on %s"), *FuncName, *Target->GetClass()->GetName()); return false; }
@@ -258,22 +182,6 @@ namespace UEMCPPIE
 		if (bOk)
 		{
 			Target->ProcessEvent(Function, Params);
-
-			// Read the return value back out before the parameter block is destroyed.
-			for (TFieldIterator<FProperty> It(Function); It && It->HasAnyPropertyFlags(CPF_Parm); ++It)
-			{
-				if (!It->HasAnyPropertyFlags(CPF_ReturnParm)) continue;
-				void* ReturnPtr = It->ContainerPtrToValuePtr<void>(Params);
-				OutReturn = FJsonObjectConverter::UPropertyToJsonValue(*It, ReturnPtr);
-				if (OutReturnObject)
-				{
-					if (FObjectPropertyBase* OP = CastField<FObjectPropertyBase>(*It))
-					{
-						*OutReturnObject = OP->GetObjectPropertyValue(ReturnPtr);
-					}
-				}
-				break;
-			}
 		}
 
 		for (TFieldIterator<FProperty> It(Function); It && It->HasAnyPropertyFlags(CPF_Parm); ++It)

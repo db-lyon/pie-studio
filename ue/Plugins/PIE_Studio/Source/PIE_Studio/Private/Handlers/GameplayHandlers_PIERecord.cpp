@@ -33,6 +33,10 @@ namespace
 		R->SetNumberField(TEXT("current_frame"), S.CurrentFrame);
 		R->SetNumberField(TEXT("elapsed_seconds"), S.ElapsedSeconds);
 		R->SetNumberField(TEXT("tracked_action_count"), S.TrackedActionCount);
+		if (!S.LastError.IsEmpty())
+		{
+			R->SetStringField(TEXT("last_error"), S.LastError);
+		}
 	}
 
 	void WriteFinishFields(TSharedPtr<FJsonObject> R, const FRecorderFinishResult& F)
@@ -69,6 +73,12 @@ namespace
 TSharedPtr<FJsonValue> FGameplayHandlers::PieRecordArm(const TSharedPtr<FJsonObject>& Params)
 {
 	MCP_CHECK_GAME_THREAD();
+	int32 PIEInstance = INDEX_NONE;
+	FString PIEInstanceError;
+	if (!FGameplayHandlers::ParsePIEInstance(Params, PIEInstance, PIEInstanceError))
+	{
+		return MCPError(PIEInstanceError);
+	}
 	FRecorderArmConfig Cfg;
 
 	const TArray<TSharedPtr<FJsonValue>>* ActionsArr = nullptr;
@@ -108,7 +118,12 @@ TSharedPtr<FJsonValue> FGameplayHandlers::PieRecordArm(const TSharedPtr<FJsonObj
 	if (Params->TryGetBoolField(TEXT("take_record"), BV))        Cfg.bTakeRecord = BV;
 
 	int32 ClientId = 0;
-	if (Params->TryGetNumberField(TEXT("client_id"), ClientId)) Cfg.ClientId = FMath::Max(0, ClientId);
+	if (Params->TryGetNumberField(TEXT("client_id"), ClientId))
+	{
+		Cfg.ClientId = FMath::Max(0, ClientId);
+	}
+
+	Cfg.PIEInstance = PIEInstance;
 
 	if (Params->HasField(TEXT("rng_seed")))
 	{

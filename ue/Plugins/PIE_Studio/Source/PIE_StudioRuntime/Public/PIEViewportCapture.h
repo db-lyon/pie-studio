@@ -6,11 +6,12 @@
 #include <atomic>
 
 class FRHIGPUTextureReadback;
+class FViewport;
 
 namespace UEMCPPIE
 {
 
-class FPIEViewportCapture : public FSceneViewExtensionBase
+class PIE_STUDIORUNTIME_API FPIEViewportCapture : public FSceneViewExtensionBase
 {
 public:
 	FPIEViewportCapture(const FAutoRegister& AutoReg);
@@ -22,8 +23,13 @@ public:
 	virtual void PostRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily) override;
 	virtual bool IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const override;
 
+	/** Called on the game thread once the image is written (true) or could not be (false). */
+	using FOnCaptureWritten = TFunction<void(bool bWritten)>;
+
 	void SetEnabled(bool bEnable);
-	void RequestCapture(const FString& OutputPath);
+	/** Read this viewport only. Unset, the capture reads GEngine's game viewport, the only one in a -game process. */
+	void SetTargetViewport(const FViewport* Viewport);
+	void RequestCapture(const FString& OutputPath, FOnCaptureWritten OnWritten = nullptr);
 	int32 GetCapturedCount() const;
 
 	// Output encoding for subsequent captures. JPEG (default) is far smaller and
@@ -44,14 +50,18 @@ private:
 		FString Path;
 		int32 Width = 0;
 		int32 Height = 0;
-		bool bSwapRB = false;
+		EPixelFormat Format = PF_B8G8R8A8;
 		bool bJpeg = true;
 		int32 Quality = 80;
+		FOnCaptureWritten OnWritten;
 	};
 
 	// Poll (or, when bDrainAll, block on) in-flight readbacks and hand each
 	// completed one off to a background PNG write. Render thread only.
 	void ProcessReadbacks_RenderThread(FRHICommandListImmediate& RHICmdList, bool bDrainAll);
+
+	void EnqueueReadback_RenderThread(FRDGBuilder& GraphBuilder, FTextureRHIRef Texture, FIntPoint Size,
+		EPixelFormat Format, const FString& Path, FOnCaptureWritten OnWritten);
 
 	TArray<FInFlightReadback> InFlight;
 
@@ -59,7 +69,9 @@ private:
 	std::atomic<bool> bUseJpeg{true};
 	std::atomic<int32> JpegQuality{80};
 	mutable FCriticalSection Lock;
-	FString PendingPath;
+	struct FPendingRequest { FString Path; FOnCaptureWritten OnWritten; };
+	TArray<FPendingRequest> Pending;
+	std::atomic<const FViewport*> TargetViewport{nullptr};
 	std::atomic<int32> CapturedCount{0};
 };
 

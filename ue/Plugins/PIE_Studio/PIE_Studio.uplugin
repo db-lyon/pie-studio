@@ -11,6 +11,11 @@
   "IsBetaVersion": true,
   "Modules": [
     {
+      "Name": "PIE_StudioRuntime",
+      "Type": "DeveloperTool",
+      "LoadingPhase": "Default"
+    },
+    {
       "Name": "PIE_Studio",
       "Type": "Editor",
       "LoadingPhase": "PostEngineInit"

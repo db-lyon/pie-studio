@@ -1,12 +1,14 @@
 #include "PIEObserver.h"
 #include "MCPObservationProfile.h"
 #include "PIESequenceFormat.h"
+#include "PIEWorldResolver.h"
 #include "PIE_StudioModule.h"
 #include "Editor.h"
 #include "Engine/World.h"
 #include "HAL/FileManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "HAL/PlatformTime.h"
 
 namespace UEMCPPIE
 {
@@ -40,6 +42,8 @@ namespace UEMCPPIE
 				OutRow.Actors.Add(Id, AS);
 			}
 		}
+
+		constexpr double ObserverTargetResolveTimeoutSeconds = 10.0;
 	}
 
 	FPIEObserver& FPIEObserver::Get()
@@ -69,6 +73,7 @@ namespace UEMCPPIE
 		EndPIEHandle.Reset();
 		UnbindEndFrame();
 		Sessions.Reset();
+		LastError.Reset();
 	}
 
 	void FPIEObserver::BindEndFrame()
@@ -103,6 +108,10 @@ namespace UEMCPPIE
 			return false;
 		}
 
+		if (!IsActive())
+		{
+			LastError.Reset();
+		}
 		FObservationSession S;
 		S.Config = Cfg;
 		S.ProfilePath = Cfg.ProfilePath;
@@ -172,8 +181,15 @@ namespace UEMCPPIE
 		bool bAnyStarted = false;
 		for (FObservationSession& S : Sessions)
 		{
-			if (S.State != EObserverState::Armed) continue;
-
+			if (S.State != EObserverState::Armed)
+			{
+				continue;
+			}
+			S.TargetWorld.Reset();
+			S.ResolvedPIEInstance = INDEX_NONE;
+			S.bTargetResolved = false;
+			S.TargetResolveStartSeconds = FPlatformTime::Seconds();
+			S.TargetResolveError.Reset();
 			FPIEFrameSampler::FConfig SC;
 			SC.AxisThreshold = 0.15f;
 			SC.bCapturePawnState = S.bCapturePawnState;
@@ -200,12 +216,44 @@ namespace UEMCPPIE
 
 	void FPIEObserver::OnEndFrame()
 	{
-		UWorld* PIEWorld = nullptr;
-		if (GEditor) PIEWorld = GEditor->PlayWorld;
-		if (!PIEWorld) return;
-
 		for (FObservationSession& S : Sessions)
 		{
+			if (S.State == EObserverState::Idle || S.State == EObserverState::Completed)
+			{
+				continue;
+			}
+			UWorld* PIEWorld = S.TargetWorld.Get();
+			if (!S.bTargetResolved)
+			{
+				PIEWorldResolver::FPlayerTarget Target;
+				FString Error;
+				if (!PIEWorldResolver::ResolvePlayer(
+					S.Config.PIEInstance, S.Config.ClientId, Target, Error))
+				{
+					S.TargetResolveError = Error;
+					if (S.TargetResolveStartSeconds > 0.0
+						&& FPlatformTime::Seconds() - S.TargetResolveStartSeconds >= ObserverTargetResolveTimeoutSeconds)
+					{
+						const FObserverFinishResult Finish = FinaliseSession(S);
+						if (!Finish.Error.IsEmpty())
+						{
+							LastError = Finish.Error;
+						}
+					}
+					continue;
+				}
+				S.TargetWorld = Target.World;
+				S.ResolvedPIEInstance = Target.PIEInstance;
+				S.bTargetResolved = true;
+				S.TargetResolveError.Reset();
+				PIEWorld = Target.World;
+			}
+
+			if (!PIEWorld)
+			{
+				continue;
+			}
+
 			if (S.State == EObserverState::WaitingForPawn)
 			{
 				if (S.Sampler.AttachToPIE(PIEWorld))
@@ -250,6 +298,10 @@ namespace UEMCPPIE
 				S.FramesSampled++;
 			}
 		}
+		if (!IsActive())
+		{
+			UnbindEndFrame();
+		}
 	}
 
 	void FPIEObserver::OnEndPIE(bool /*bIsSimulating*/)
@@ -274,7 +326,13 @@ namespace UEMCPPIE
 
 		if (S.FramesSampled == 0)
 		{
-			R.bSuccess = true;
+			const bool bTargetFailed = !S.bTargetResolved && !S.TargetResolveError.IsEmpty();
+			R.bSuccess = !bTargetFailed;
+			if (bTargetFailed)
+			{
+				R.Error = S.TargetResolveError;
+				LastError = R.Error;
+			}
 			S.State = EObserverState::Completed;
 			return R;
 		}
@@ -317,6 +375,10 @@ namespace UEMCPPIE
 			M->SetStringField(TEXT("ended_at"), ISOTimestampNow());
 			M->SetNumberField(TEXT("frames_sampled"), S.FramesSampled);
 			M->SetNumberField(TEXT("sample_hz"), S.CSVHdr.SampleHz);
+			if (S.ResolvedPIEInstance >= 0)
+			{
+				M->SetNumberField(TEXT("pie_instance"), S.ResolvedPIEInstance);
+			}
 
 			TArray<TSharedPtr<FJsonValue>> Vals;
 			for (const FString& P : S.TrackedValuePaths)
@@ -391,10 +453,10 @@ namespace UEMCPPIE
 				Out.RunId = S.RunId;
 				Out.ProfilePath = S.ProfilePath;
 				Out.FramesSampled += S.FramesSampled;
-				if (GEditor && GEditor->PlayWorld && S.AttachTime > 0.0)
+				if (S.TargetWorld.IsValid() && S.AttachTime > 0.0)
 				{
 					Out.ElapsedSeconds = FMath::Max(Out.ElapsedSeconds,
-						GEditor->PlayWorld->GetTimeSeconds() - S.AttachTime);
+						S.TargetWorld->GetTimeSeconds() - S.AttachTime);
 				}
 			}
 			else if (S.State == EObserverState::WaitingForPawn && Out.State == EObserverState::Idle)
@@ -411,6 +473,7 @@ namespace UEMCPPIE
 		{
 			Out.RunId = FString::Printf(TEXT("%d sessions"), Sessions.Num());
 		}
+		Out.LastError = LastError;
 
 		return Out;
 	}
@@ -444,9 +507,9 @@ namespace UEMCPPIE
 			Snap.TrackedActorIds = S.TrackedActorIds;
 			Snap.LastActorRow = S.LastActorRow;
 
-			if (GEditor && GEditor->PlayWorld && S.AttachTime > 0.0)
+			if (S.TargetWorld.IsValid() && S.AttachTime > 0.0)
 			{
-				Snap.ElapsedSeconds = GEditor->PlayWorld->GetTimeSeconds() - S.AttachTime;
+				Snap.ElapsedSeconds = S.TargetWorld->GetTimeSeconds() - S.AttachTime;
 			}
 			Out.Add(MoveTemp(Snap));
 		}

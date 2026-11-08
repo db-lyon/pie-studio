@@ -2,11 +2,14 @@
 #include "Modules/ModuleManager.h"
 #include "MCPHandlerRegistration.h"
 #include "Handlers/GameplayHandlers.h"
-#include "PIE/PIEInputInjector.h"
+#include "PIEInputInjector.h"
+#include "PIE/PIERemotePlayers.h"
+#include "PIE/PIEUatRunner.h"
+#include "PIE/PIEWorldResolver.h"
+#include "Engine/LocalPlayer.h"
 #include "PIE/PIEInputRecorder.h"
 #include "PIE/PIEInputReplayer.h"
 #include "PIE/PIEObserver.h"
-#include "PIE/PIETelemetryRecorder.h"
 #include "PIE/PIESessionLog.h"
 #include "UI/SMCPPIEPanel.h"
 #include "Editor.h"
@@ -18,11 +21,17 @@ IMPLEMENT_MODULE(FPIE_StudioModule, PIE_Studio)
 
 void FPIE_StudioModule::StartupModule()
 {
-	UEMCPPIE::FPIEInputInjector::Init();
+	// The injector lives in PIE_StudioRuntime (so clients in their own process run it too); in the editor it resolves
+	// (pie_instance, client_id) through the PIE world resolver.
+	UEMCPPIE::FPIEInputInjector::SetPlayerResolver([](int32 PIEInstance, int32 ClientIndex, FString& OutError) -> ULocalPlayer*
+	{
+		UEMCPPIE::PIEWorldResolver::FPlayerTarget Target;
+		return UEMCPPIE::PIEWorldResolver::ResolvePlayer(PIEInstance, ClientIndex, Target, OutError) ? Target.LocalPlayer : nullptr;
+	});
+	UEMCPPIE::PIERemotePlayers::Init();
 	UEMCPPIE::FPIEInputRecorder::Get().Init();
 	UEMCPPIE::FPIEInputReplayer::Get().Init();
 	UEMCPPIE::FPIEObserver::Get().Init();
-	UEMCPPIE::FPIETelemetryRecorder::Get().Init();
 	UEMCPPIE::FPIESessionLog::Get().Init();
 	SMCPPIEPanel::RegisterTab();
 	SMCPPIEPanel::RegisterToolbarButton();
@@ -42,6 +51,16 @@ void FPIE_StudioModule::StartupModule()
 	UEMCP::RegisterExternalHandler(TEXT("inject_input_update"), &FGameplayHandlers::InjectInputUpdate);
 	UEMCP::RegisterExternalHandler(TEXT("inject_input_stop"), &FGameplayHandlers::InjectInputStop);
 	UEMCP::RegisterExternalHandler(TEXT("inject_input_tape"), &FGameplayHandlers::InjectInputTape);
+
+	// Multiplayer players
+	UEMCP::RegisterExternalHandler(TEXT("clients"), &FGameplayHandlers::PieClients);
+	UEMCP::RegisterExternalHandler(TEXT("console"), &FGameplayHandlers::PieConsole);
+	UEMCP::RegisterExternalHandler(TEXT("remote_result"), &FGameplayHandlers::PieRemoteResult);
+
+	// Multiplayer acceptance runs
+	UEMCP::RegisterExternalHandler(TEXT("uat_run"), &FGameplayHandlers::PieUatRun);
+	UEMCP::RegisterExternalHandler(TEXT("uat_status"), &FGameplayHandlers::PieUatStatus);
+	UEMCP::RegisterExternalHandler(TEXT("uat_abort"), &FGameplayHandlers::PieUatAbort);
 
 	// Recording
 	UEMCP::RegisterExternalHandler(TEXT("record_arm"), &FGameplayHandlers::PieRecordArm);
@@ -104,24 +123,11 @@ void FPIE_StudioModule::StartupModule()
 	// Assertion layer (Roadmap v2, Phase A)
 	UEMCP::RegisterExternalHandler(TEXT("assert_eval"), &FGameplayHandlers::PieAssertEval);
 
-	// Per-tick actor telemetry (#954)
-	UEMCP::RegisterExternalHandler(TEXT("telemetry_start"), &FGameplayHandlers::PieTelemetryStart);
-	UEMCP::RegisterExternalHandler(TEXT("telemetry_status"), &FGameplayHandlers::PieTelemetryStatus);
-	UEMCP::RegisterExternalHandler(TEXT("telemetry_stop"), &FGameplayHandlers::PieTelemetryStop);
-
 	// Actor puppeteering (Roadmap v2, F1)
 	UEMCP::RegisterExternalHandler(TEXT("actor_spawn"), &FGameplayHandlers::PieActorSpawn);
 	UEMCP::RegisterExternalHandler(TEXT("actor_destroy"), &FGameplayHandlers::PieActorDestroy);
 	UEMCP::RegisterExternalHandler(TEXT("actor_set"), &FGameplayHandlers::PieActorSet);
 	UEMCP::RegisterExternalHandler(TEXT("actor_call"), &FGameplayHandlers::PieActorCall);
-
-	// Orchestration (#955, #960). Registered with a longer timeout than the
-	// default: both run their whole sequence inside one game-thread dispatch, and
-	// a socket-side timeout that abandoned the wait while the game thread was
-	// still applying steps would leave the world half-driven - the exact failure
-	// these verbs exist to remove.
-	UEMCP::RegisterExternalHandlerWithTimeout(TEXT("run_sequence"), &FGameplayHandlers::PieRunSequence, 120.0f);
-	UEMCP::RegisterExternalHandlerWithTimeout(TEXT("sample_loop"), &FGameplayHandlers::PieSampleLoop, 120.0f);
 
 	// Declarative scenario (Roadmap v2, F2)
 	UEMCP::RegisterExternalHandler(TEXT("scenario_scaffold"), &FGameplayHandlers::PieScenarioScaffold);
@@ -144,7 +150,8 @@ void FPIE_StudioModule::StartupModule()
 			{
 				return UEMCPPIE::FPIEInputRecorder::Get().IsActive()
 				    || UEMCPPIE::FPIEInputReplayer::Get().IsActive()
-				    || UEMCPPIE::FPIEObserver::Get().IsActive();
+				    || UEMCPPIE::FPIEObserver::Get().IsActive()
+				    || UEMCPPIE::FPIEUatRunner::Get().IsRunning();
 			});
 			GEditor->ShouldDisableCPUThrottlingDelegates.Add(Suppress);
 			return false;
@@ -165,6 +172,12 @@ void FPIE_StudioModule::ShutdownModule()
 	UEMCP::UnregisterExternalHandler(TEXT("inject_input_update"));
 	UEMCP::UnregisterExternalHandler(TEXT("inject_input_stop"));
 	UEMCP::UnregisterExternalHandler(TEXT("inject_input_tape"));
+	UEMCP::UnregisterExternalHandler(TEXT("clients"));
+	UEMCP::UnregisterExternalHandler(TEXT("console"));
+	UEMCP::UnregisterExternalHandler(TEXT("remote_result"));
+	UEMCP::UnregisterExternalHandler(TEXT("uat_run"));
+	UEMCP::UnregisterExternalHandler(TEXT("uat_status"));
+	UEMCP::UnregisterExternalHandler(TEXT("uat_abort"));
 	UEMCP::UnregisterExternalHandler(TEXT("record_arm"));
 	UEMCP::UnregisterExternalHandler(TEXT("record_disarm"));
 	UEMCP::UnregisterExternalHandler(TEXT("record_stop"));
@@ -206,22 +219,19 @@ void FPIE_StudioModule::ShutdownModule()
 	UEMCP::UnregisterExternalHandler(TEXT("test_run"));
 	UEMCP::UnregisterExternalHandler(TEXT("test_list"));
 	UEMCP::UnregisterExternalHandler(TEXT("assert_eval"));
-	UEMCP::UnregisterExternalHandler(TEXT("telemetry_start"));
-	UEMCP::UnregisterExternalHandler(TEXT("telemetry_status"));
-	UEMCP::UnregisterExternalHandler(TEXT("telemetry_stop"));
 	UEMCP::UnregisterExternalHandler(TEXT("actor_spawn"));
 	UEMCP::UnregisterExternalHandler(TEXT("actor_destroy"));
 	UEMCP::UnregisterExternalHandler(TEXT("actor_set"));
 	UEMCP::UnregisterExternalHandler(TEXT("actor_call"));
-	UEMCP::UnregisterExternalHandler(TEXT("run_sequence"));
-	UEMCP::UnregisterExternalHandler(TEXT("sample_loop"));
 	UEMCP::UnregisterExternalHandler(TEXT("scenario_scaffold"));
 	UEMCP::UnregisterExternalHandler(TEXT("scenario_validate"));
 
 	UEMCPPIE::FPIESessionLog::Get().Shutdown();
 	UEMCPPIE::FPIEObserver::Get().Shutdown();
-	UEMCPPIE::FPIETelemetryRecorder::Get().Shutdown();
 	UEMCPPIE::FPIEInputReplayer::Get().Shutdown();
 	UEMCPPIE::FPIEInputRecorder::Get().Shutdown();
-	UEMCPPIE::FPIEInputInjector::Shutdown();
+	// The injector itself belongs to PIE_StudioRuntime and shuts down with it; only the editor's resolver is withdrawn.
+	UEMCPPIE::FPIEInputInjector::SetPlayerResolver(nullptr);
+	UEMCPPIE::PIERemotePlayers::Shutdown();
+	UEMCPPIE::FPIEUatRunner::Get().Shutdown();
 }

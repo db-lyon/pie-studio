@@ -15,6 +15,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "HAL/PlatformFileManager.h"
 #include "HAL/FileManager.h"
+#include "HAL/PlatformTime.h"
 #include "Misc/App.h"
 #include "Misc/CoreDelegates.h"
 #include "Misc/DateTime.h"
@@ -31,6 +32,7 @@
 #include "Engine/GameViewportClient.h"
 #include "ImageUtils.h"
 #include "Async/Async.h"
+#include "PIEWorldResolver.h"
 
 namespace UEMCPPIE
 {
@@ -84,6 +86,7 @@ namespace UEMCPPIE
 			return Out.IsEmpty() ? FString(TEXT("capture")) : Out;
 		}
 
+		constexpr double ReplayerTargetResolveTimeoutSeconds = 10.0;
 	}
 
 	FPIEInputReplayer& FPIEInputReplayer::Get()
@@ -119,8 +122,23 @@ namespace UEMCPPIE
 		bEndFrameBound = false;
 		State = EReplayerState::Idle;
 		bArmed = false;
+		TargetWorld.Reset();
+		TargetPlayerController.Reset();
+		TargetLocalPlayer.Reset();
+		ResolvedPIEInstance = INDEX_NONE;
+		bTargetResolved = false;
+		TargetResolveStartSeconds = 0.0;
+		TargetResolveError.Reset();
+		for (const FHoldHandle& H : ActiveHolds)
+		{
+			FPIEInputInjector::StopAny(H.InjectionId);
+		}
+		for (const FString& Id : ActiveTapes)
+		{
+			FPIEInputInjector::StopAny(Id);
+		}
 		ActiveHolds.Reset();
-		DriftFrames.Reset();
+		ActiveTapes.Reset();
 	}
 
 	bool FPIEInputReplayer::LoadSourceFrames(const FString& CSVPath, FString& OutError)
@@ -224,13 +242,13 @@ namespace UEMCPPIE
 	void FPIEInputReplayer::EjectPlayer(UWorld* PIEWorld)
 	{
 		if (bEjected || !PIEWorld) return;
-		APlayerController* PC = (Pending.ClientId > 0)
-			? UGameplayStatics::GetPlayerController(PIEWorld, Pending.ClientId)
-			: PIEWorld->GetFirstPlayerController();
-		if (!PC) return;
+		APlayerController* PC = TargetPlayerController.Get();
+		if (!PC || PC->GetWorld() != PIEWorld)
+		{
+			return;
+		}
 		APawn* Pawn = PC->GetPawn();
 		if (!Pawn) return;
-
 		EjectedPC = PC;
 		EjectedPawn = Pawn;
 
@@ -272,12 +290,21 @@ namespace UEMCPPIE
 
 	bool FPIEInputReplayer::Arm(const FReplayerArmConfig& Cfg, FString& OutError, FString& OutMessage)
 	{
-		if (State == EReplayerState::Replaying || State == EReplayerState::WaitingForPawn)
+		if (State == EReplayerState::Replaying
+			|| State == EReplayerState::WaitingForPawn
+			|| State == EReplayerState::Completed)
 		{
 			ForceStop();
 		}
 
 		Pending = Cfg;
+		TargetWorld.Reset();
+		TargetPlayerController.Reset();
+		TargetLocalPlayer.Reset();
+		ResolvedPIEInstance = INDEX_NONE;
+		bTargetResolved = false;
+		TargetResolveStartSeconds = 0.0;
+		TargetResolveError.Reset();
 		ActiveSequence = FSequence();
 		SourceFrames.Reset();
 		CurrentSourceCSV.Reset();
@@ -302,7 +329,16 @@ namespace UEMCPPIE
 		CaptureDir.Reset();
 		NextStepIndex = 0;
 		ExecutedSteps = 0;
+		for (const FHoldHandle& H : ActiveHolds)
+		{
+			FPIEInputInjector::StopAny(H.InjectionId);
+		}
+		for (const FString& Id : ActiveTapes)
+		{
+			FPIEInputInjector::StopAny(Id);
+		}
 		ActiveHolds.Reset();
+		ActiveTapes.Reset();
 		bEndPIERequested = false;
 
 		FString Err;
@@ -383,7 +419,11 @@ namespace UEMCPPIE
 
 	bool FPIEInputReplayer::Disarm(FString& OutError)
 	{
-		if (State == EReplayerState::Replaying || State == EReplayerState::WaitingForPawn)
+		if (State == EReplayerState::Completed)
+		{
+			FinaliseCurrent();
+		}
+		else if (State == EReplayerState::Replaying || State == EReplayerState::WaitingForPawn)
 		{
 			OutError = TEXT("Replay is in flight; pie_replay_stop to finalize.");
 			return false;
@@ -431,6 +471,13 @@ namespace UEMCPPIE
 	{
 		if (!bArmed) return;
 		bArmed = false;
+		TargetWorld.Reset();
+		TargetPlayerController.Reset();
+		TargetLocalPlayer.Reset();
+		ResolvedPIEInstance = INDEX_NONE;
+		bTargetResolved = false;
+		TargetResolveStartSeconds = FPlatformTime::Seconds();
+		TargetResolveError.Reset();
 
 		FPIEFrameSampler::FConfig SC;
 		SC.AxisThreshold = 0.15f;
@@ -479,7 +526,9 @@ namespace UEMCPPIE
 				if (Act)
 				{
 					FString Err;
-					FPIEInputInjector::InjectOnce(Act, VectorToActionValue(Act->ValueType, FVector(S.ValueX, S.ValueY, S.ValueZ)), Err, Pending.ClientId);
+					FPIEInputInjector::InjectOnce(Act,
+						VectorToActionValue(Act->ValueType, FVector(S.ValueX, S.ValueY, S.ValueZ)),
+						Err, Pending.ClientId, ResolvedPIEInstance, TargetLocalPlayer.Get());
 				}
 				break;
 			}
@@ -489,7 +538,9 @@ namespace UEMCPPIE
 				if (Act)
 				{
 					FString Err;
-					const FString Id = FPIEInputInjector::StartHold(Act, VectorToActionValue(Act->ValueType, FVector(S.ValueX, S.ValueY, S.ValueZ)), FString(), Err, Pending.ClientId);
+					const FString Id = FPIEInputInjector::StartHold(Act,
+						VectorToActionValue(Act->ValueType, FVector(S.ValueX, S.ValueY, S.ValueZ)),
+						FString(), Err, Pending.ClientId, ResolvedPIEInstance, TargetLocalPlayer.Get());
 					if (!Id.IsEmpty())
 					{
 						FHoldHandle H;
@@ -507,7 +558,13 @@ namespace UEMCPPIE
 				if (Act)
 				{
 					FString Err;
-					FPIEInputInjector::StartTape(Act, S.TapeValues, ActiveSequence.SampleHz, FString(), Err, Pending.ClientId);
+					const FString Id = FPIEInputInjector::StartTape(Act, S.TapeValues,
+						ActiveSequence.SampleHz, FString(), Err, Pending.ClientId,
+						ResolvedPIEInstance, TargetLocalPlayer.Get());
+					if (!Id.IsEmpty())
+					{
+						ActiveTapes.Add(Id);
+					}
 				}
 				break;
 			}
@@ -516,9 +573,9 @@ namespace UEMCPPIE
 				break;
 			case EStepType::Console:
 			{
-				if (GEditor && GEditor->PlayWorld && GEngine && !S.Command.IsEmpty())
+				if (TargetWorld.IsValid() && GEngine && !S.Command.IsEmpty())
 				{
-					GEngine->Exec(GEditor->PlayWorld, *S.Command);
+					GEngine->Exec(TargetWorld.Get(), *S.Command);
 				}
 				break;
 			}
@@ -572,7 +629,40 @@ namespace UEMCPPIE
 	void FPIEInputReplayer::OnEndFrame()
 	{
 		if (State == EReplayerState::Idle || State == EReplayerState::Completed) return;
-		UWorld* PIEWorld = GEditor ? GEditor->PlayWorld : nullptr;
+
+		UWorld* PIEWorld = TargetWorld.Get();
+		if (!bTargetResolved)
+		{
+			PIEWorldResolver::FPlayerTarget Target;
+			FString Error;
+			if (!PIEWorldResolver::ResolvePlayer(Pending.PIEInstance, Pending.ClientId, Target, Error))
+			{
+				TargetResolveError = Error;
+				if (TargetResolveStartSeconds > 0.0
+					&& FPlatformTime::Seconds() - TargetResolveStartSeconds >= ReplayerTargetResolveTimeoutSeconds)
+				{
+					if (Pending.bAutoStopPIE && !bEndPIERequested)
+					{
+						bEndPIERequested = true;
+						if (GEditor)
+						{
+							UE_LOG(LogPIEStudio, Log, TEXT("[PIE-REP] Target resolution timed out; requesting PIE shutdown"));
+							GEditor->RequestEndPlayMap();
+						}
+					}
+					FinaliseCurrent();
+				}
+				return;
+			}
+			TargetWorld = Target.World;
+			TargetPlayerController = Target.PlayerController;
+			TargetLocalPlayer = Target.LocalPlayer;
+			ResolvedPIEInstance = Target.PIEInstance;
+			bTargetResolved = true;
+			TargetResolveError.Reset();
+			PIEWorld = Target.World;
+		}
+
 		if (!PIEWorld) return;
 
 		if (State == EReplayerState::WaitingForPawn)
@@ -588,10 +678,8 @@ namespace UEMCPPIE
 					: (Pending.PinFPS > 0 ? Pending.PinFPS : ActiveSequence.SampleHz);
 				ApplyFPSPin(PIEWorld, Hz);
 
-				APlayerController* PC = (Pending.ClientId > 0)
-					? UGameplayStatics::GetPlayerController(PIEWorld, Pending.ClientId)
-					: PIEWorld->GetFirstPlayerController();
-				if (PC)
+				APlayerController* PC = TargetPlayerController.Get();
+				if (PC && PC->GetWorld() == PIEWorld)
 				{
 					APawn* Pawn = PC->GetPawn();
 					if (Pawn)
@@ -817,10 +905,18 @@ namespace UEMCPPIE
 				}
 			}
 
+			for (int32 i = ActiveTapes.Num() - 1; i >= 0; --i)
+			{
+				if (!FPIEInputInjector::IsActive(ActiveTapes[i]))
+				{
+					ActiveTapes.RemoveAt(i);
+				}
+			}
+
 			// Auto-stop when all steps consumed and all holds released. In
 			// monitor mode the steps were never executed so we drive completion
 			// purely off frame count against the source recording.
-			const bool bStepsDone = Pending.bMonitor ? true : (NextStepIndex >= ActiveSequence.Steps.Num() && ActiveHolds.Num() == 0);
+			const bool bStepsDone = Pending.bMonitor ? true : (NextStepIndex >= ActiveSequence.Steps.Num() && ActiveHolds.Num() == 0 && ActiveTapes.Num() == 0);
 			if (bStepsDone)
 			{
 				// Stay in Replaying for one more sample frame to let drift catch
@@ -868,8 +964,18 @@ namespace UEMCPPIE
 			FPIEInputInjector::StopAny(H.InjectionId);
 		}
 		ActiveHolds.Reset();
+		for (const FString& Id : ActiveTapes)
+		{
+			FPIEInputInjector::StopAny(Id);
+		}
+		ActiveTapes.Reset();
 
-		R.bSuccess = true;
+		const bool bTargetFailed = !bTargetResolved && !TargetResolveError.IsEmpty();
+		R.bSuccess = !bTargetFailed;
+		if (bTargetFailed)
+		{
+			R.Error = TargetResolveError;
+		}
 		R.ExecutedSteps = ExecutedSteps;
 		R.FramesCaptured = FramesCaptured;
 		R.CaptureDir = CaptureDir;
@@ -1015,6 +1121,13 @@ namespace UEMCPPIE
 			OnEndFrameHandle.Reset();
 			bEndFrameBound = false;
 		}
+		TargetWorld.Reset();
+		TargetPlayerController.Reset();
+		TargetLocalPlayer.Reset();
+		ResolvedPIEInstance = INDEX_NONE;
+		bTargetResolved = false;
+		TargetResolveStartSeconds = 0.0;
+		TargetResolveError.Reset();
 		State = EReplayerState::Idle;
 		bEndPIERequested = false;
 		// Retain the outcome so a poller (replay_status) can read the drift
@@ -1037,14 +1150,33 @@ namespace UEMCPPIE
 		S.CurrentStep = NextStepIndex;
 		S.TotalSteps = ActiveSequence.Steps.Num();
 		S.ElapsedSeconds = 0.0;
-		if (GEditor && GEditor->PlayWorld && AttachTime > 0.0)
+		if (TargetWorld.IsValid() && AttachTime > 0.0)
 		{
-			S.ElapsedSeconds = GEditor->PlayWorld->GetTimeSeconds() - AttachTime;
+			S.ElapsedSeconds = TargetWorld->GetTimeSeconds() - AttachTime;
 		}
 		S.MaxPositionDriftCm = MaxPosDriftCm;
 		S.MaxVelocityDriftCms = MaxVelDriftCms;
 		S.FramesCaptured = FramesCaptured;
-		S.bPIEActive = (GEditor && GEditor->PlayWorld != nullptr);
+		bool bPIEActive = false;
+		if (GEngine)
+		{
+			for (const FWorldContext& Context : GEngine->GetWorldContexts())
+			{
+				const bool bRuntimeWorld = Context.WorldType == EWorldType::PIE
+					|| Context.WorldType == EWorldType::Game;
+				if (bRuntimeWorld && Context.World())
+				{
+					bPIEActive = true;
+					break;
+				}
+			}
+		}
+		S.bPIEActive = bPIEActive;
+		S.LastError = TargetResolveError;
+		if (S.LastError.IsEmpty() && State == EReplayerState::Idle && bHasLastFinish)
+		{
+			S.LastError = LastFinish.Error;
+		}
 		if (bHasLastFinish)
 		{
 			S.bHasLastResult = true;
@@ -1073,9 +1205,9 @@ namespace UEMCPPIE
 		S.MaxRotationDriftDeg = MaxRotDriftDeg;
 		S.MontageMismatches = MontageMismatches;
 		S.MaxTrackedDeltas = MaxTrackedDeltas;
-		if (GEditor && GEditor->PlayWorld && AttachTime > 0.0)
+		if (TargetWorld.IsValid() && AttachTime > 0.0)
 		{
-			S.ElapsedSeconds = GEditor->PlayWorld->GetTimeSeconds() - AttachTime;
+			S.ElapsedSeconds = TargetWorld->GetTimeSeconds() - AttachTime;
 		}
 		return S;
 	}

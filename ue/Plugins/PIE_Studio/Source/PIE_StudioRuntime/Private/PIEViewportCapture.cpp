@@ -1,5 +1,5 @@
 #include "PIEViewportCapture.h"
-#include "PIE_StudioModule.h"
+#include "PIE_StudioRuntimeModule.h"
 #include "RenderGraphBuilder.h"
 #include "RenderGraphUtils.h"
 #include "RHIGPUReadback.h"
@@ -12,6 +12,8 @@
 #include "Engine/GameViewportClient.h"
 #include "Engine/Engine.h"
 #include "UnrealClient.h"
+#include "PixelFormat.h"
+#include "Math/Float16Color.h"
 
 namespace UEMCPPIE
 {
@@ -63,8 +65,18 @@ FPIEViewportCapture::~FPIEViewportCapture()
 bool FPIEViewportCapture::IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const
 {
 	if (!bEnabled.load(std::memory_order_acquire)) return false;
+	// A targeted capture reads exactly that viewport; one PIE process can hold several players' viewports.
+	if (const FViewport* Target = TargetViewport.load(std::memory_order_acquire))
+	{
+		return Context.Viewport == Target;
+	}
 	if (!GEngine || !GEngine->GameViewport) return false;
 	return Context.Viewport == GEngine->GameViewport->Viewport;
+}
+
+void FPIEViewportCapture::SetTargetViewport(const FViewport* Viewport)
+{
+	TargetViewport.store(Viewport, std::memory_order_release);
 }
 
 void FPIEViewportCapture::SetEnabled(bool bEnable)
@@ -72,9 +84,14 @@ void FPIEViewportCapture::SetEnabled(bool bEnable)
 	bEnabled.store(bEnable, std::memory_order_release);
 	if (!bEnable)
 	{
+		TArray<FPendingRequest> Dropped;
 		{
 			FScopeLock SL(&Lock);
-			PendingPath.Reset();
+			Dropped = MoveTemp(Pending);
+		}
+		for (FPendingRequest& Request : Dropped)
+		{
+			if (Request.OnWritten) Request.OnWritten(false);
 		}
 		// Drain outstanding GPU copies so their PNGs get written and the RHI
 		// resources are released on the render thread before we're torn down.
@@ -82,10 +99,21 @@ void FPIEViewportCapture::SetEnabled(bool bEnable)
 	}
 }
 
-void FPIEViewportCapture::RequestCapture(const FString& OutputPath)
+void FPIEViewportCapture::RequestCapture(const FString& OutputPath, FOnCaptureWritten OnWritten)
 {
 	FScopeLock SL(&Lock);
-	PendingPath = OutputPath;
+	Pending.Add({ OutputPath, MoveTemp(OnWritten) });
+}
+
+namespace
+{
+	void NotifyCaptureWritten(FPIEViewportCapture::FOnCaptureWritten OnWritten, bool bWritten)
+	{
+		if (OnWritten)
+		{
+			AsyncTask(ENamedThreads::GameThread, [OnWritten = MoveTemp(OnWritten), bWritten]() { OnWritten(bWritten); });
+		}
+	}
 }
 
 void FPIEViewportCapture::SetOutputFormat(bool bInUseJpeg, int32 InQuality)
@@ -99,6 +127,62 @@ int32 FPIEViewportCapture::GetCapturedCount() const
 	return CapturedCount.load(std::memory_order_acquire);
 }
 
+// The viewport's render target is 8-bit BGRA in a window, but an offscreen client (-RenderOffscreen) renders into
+// r.DefaultBackBufferPixelFormat, 10-bit by default. Decode each into 8-bit BGRA; anything else is refused, never
+// reinterpreted.
+static bool DecodePixels(const void* Data, int32 RowPitchInPixels, int32 W, int32 H, EPixelFormat Format, TArray<FColor>& Out)
+{
+	Out.SetNumUninitialized(W * H);
+	switch (Format)
+	{
+	case PF_B8G8R8A8:
+	case PF_R8G8B8A8:
+		for (int32 y = 0; y < H; ++y)
+		{
+			FMemory::Memcpy(&Out[y * W], static_cast<const FColor*>(Data) + y * RowPitchInPixels, W * sizeof(FColor));
+		}
+		if (Format == PF_R8G8B8A8)
+		{
+			for (FColor& C : Out) { Swap(C.R, C.B); }
+		}
+		return true;
+	case PF_A2B10G10R10:
+		for (int32 y = 0; y < H; ++y)
+		{
+			const uint32* Row = static_cast<const uint32*>(Data) + y * RowPitchInPixels;
+			for (int32 x = 0; x < W; ++x)
+			{
+				const uint32 P = Row[x];
+				Out[y * W + x] = FColor(static_cast<uint8>((P & 0x3FF) >> 2), static_cast<uint8>(((P >> 10) & 0x3FF) >> 2), static_cast<uint8>(((P >> 20) & 0x3FF) >> 2), 255);
+			}
+		}
+		return true;
+	case PF_FloatRGBA:
+		for (int32 y = 0; y < H; ++y)
+		{
+			const FFloat16Color* Row = static_cast<const FFloat16Color*>(Data) + y * RowPitchInPixels;
+			for (int32 x = 0; x < W; ++x)
+			{
+				Out[y * W + x] = FLinearColor(Row[x]).ToFColorSRGB();
+			}
+		}
+		return true;
+	case PF_A32B32G32R32F:
+		for (int32 y = 0; y < H; ++y)
+		{
+			const FLinearColor* Row = static_cast<const FLinearColor*>(Data) + y * RowPitchInPixels;
+			for (int32 x = 0; x < W; ++x)
+			{
+				Out[y * W + x] = Row[x].ToFColorSRGB();
+			}
+		}
+		return true;
+	default:
+		Out.Reset();
+		return false;
+	}
+}
+
 void FPIEViewportCapture::ProcessReadbacks_RenderThread(FRHICommandListImmediate& RHICmdList, bool bDrainAll)
 {
 	// A full drain (teardown) blocks once so every enqueued copy is guaranteed
@@ -106,7 +190,7 @@ void FPIEViewportCapture::ProcessReadbacks_RenderThread(FRHICommandListImmediate
 	// flight, picking them up on a later frame.
 	if (bDrainAll && InFlight.Num() > 0)
 	{
-		RHICmdList.BlockUntilGPUIdle();
+		RHICmdList.SubmitAndBlockUntilGPUIdle();
 	}
 
 	for (int32 i = 0; i < InFlight.Num(); )
@@ -122,34 +206,29 @@ void FPIEViewportCapture::ProcessReadbacks_RenderThread(FRHICommandListImmediate
 		const int32 H = R.Height;
 		int32 RowPitchInPixels = 0;
 		void* Data = R.Readback->Lock(RowPitchInPixels);
-		if (Data && RowPitchInPixels >= W)
+		TArray<FColor> Pixels;
+		const bool bDecoded = Data && RowPitchInPixels >= W && DecodePixels(Data, RowPitchInPixels, W, H, R.Format, Pixels);
+		if (Data)
 		{
-			TArray<FColor> Pixels;
-			Pixels.SetNumUninitialized(W * H);
-			const FColor* Src = reinterpret_cast<const FColor*>(Data);
-			for (int32 y = 0; y < H; ++y)
-			{
-				FMemory::Memcpy(&Pixels[y * W], Src + y * RowPitchInPixels, W * sizeof(FColor));
-			}
 			R.Readback->Unlock();
-
-			// Async readback returns the texture's native byte order; swap when
-			// the source is RGBA so the PNG matches FColor's BGRA layout.
-			if (R.bSwapRB)
-			{
-				for (FColor& C : Pixels) { Swap(C.R, C.B); }
-			}
-
+		}
+		if (bDecoded)
+		{
 			CapturedCount.fetch_add(1, std::memory_order_relaxed);
 			AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask,
-				[Pix = MoveTemp(Pixels), W, H, Path = R.Path, bJpeg = R.bJpeg, Quality = R.Quality]()
+				[Pix = MoveTemp(Pixels), W, H, Path = R.Path, bJpeg = R.bJpeg, Quality = R.Quality, OnWritten = MoveTemp(R.OnWritten)]() mutable
 				{
-					EncodeColorsToFile(Pix, W, H, bJpeg, Quality, Path);
+					NotifyCaptureWritten(MoveTemp(OnWritten), EncodeColorsToFile(Pix, W, H, bJpeg, Quality, Path));
 				});
 		}
-		else if (Data)
+		else
 		{
-			R.Readback->Unlock();
+			if (Data && RowPitchInPixels >= W)
+			{
+				UE_LOG(LogPIEStudioRuntime, Warning, TEXT("Viewport capture: pixel format %s is not supported; %s not written"),
+					GPixelFormats[R.Format].Name, *R.Path);
+			}
+			NotifyCaptureWritten(MoveTemp(R.OnWritten), false);
 		}
 
 		InFlight.RemoveAt(i);
@@ -174,25 +253,36 @@ void FPIEViewportCapture::PostRenderViewFamily_RenderThread(
 	// Retire any completed copies from earlier frames first. Never blocks.
 	ProcessReadbacks_RenderThread(GraphBuilder.RHICmdList, /*bDrainAll=*/false);
 
-	FString Path;
+	// Every request queued since the last frame reads this frame.
+	TArray<FPendingRequest> Requests;
 	{
 		FScopeLock SL(&Lock);
-		if (PendingPath.IsEmpty()) return;
-		Path = PendingPath;
-		PendingPath.Reset();
+		Requests = MoveTemp(Pending);
 	}
+	if (Requests.Num() == 0) return;
 
 	const FRenderTarget* RT = InViewFamily.RenderTarget;
-	if (!RT) return;
+	FTextureRHIRef Texture = RT ? RT->GetRenderTargetTexture() : FTextureRHIRef();
+	const FIntPoint Size = RT ? RT->GetSizeXY() : FIntPoint::ZeroValue;
+	if (!Texture.IsValid() || Size.X <= 0 || Size.Y <= 0)
+	{
+		for (FPendingRequest& Request : Requests)
+		{
+			NotifyCaptureWritten(MoveTemp(Request.OnWritten), false);
+		}
+		return;
+	}
 
-	FTextureRHIRef Texture = RT->GetRenderTargetTexture();
-	if (!Texture.IsValid()) return;
+	const EPixelFormat Format = Texture->GetFormat();
+	for (FPendingRequest& Request : Requests)
+	{
+		EnqueueReadback_RenderThread(GraphBuilder, Texture, Size, Format, Request.Path, MoveTemp(Request.OnWritten));
+	}
+}
 
-	const FIntPoint Size = RT->GetSizeXY();
-	if (Size.X <= 0 || Size.Y <= 0) return;
-
-	const bool bSwapRB = (Texture->GetFormat() == PF_R8G8B8A8);
-
+void FPIEViewportCapture::EnqueueReadback_RenderThread(FRDGBuilder& GraphBuilder, FTextureRHIRef Texture, FIntPoint Size,
+	EPixelFormat Format, const FString& Path, FOnCaptureWritten OnWritten)
+{
 	// Enqueue an async GPU->CPU copy inside an RDG pass so it runs after the
 	// scene has finished rendering. Unlike ReadSurfaceData this does not stall
 	// the render thread; we poll for completion on a later frame.
@@ -215,9 +305,10 @@ void FPIEViewportCapture::PostRenderViewFamily_RenderThread(
 	Entry.Path = Path;
 	Entry.Width = Size.X;
 	Entry.Height = Size.Y;
-	Entry.bSwapRB = bSwapRB;
+	Entry.Format = Format;
 	Entry.bJpeg = bUseJpeg.load(std::memory_order_acquire);
 	Entry.Quality = JpegQuality.load(std::memory_order_acquire);
+	Entry.OnWritten = MoveTemp(OnWritten);
 	InFlight.Add(MoveTemp(Entry));
 }
 

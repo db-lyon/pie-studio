@@ -1,13 +1,12 @@
 #include "PIEFrameSampler.h"
-#include "PIEObjectAddress.h"
 #include "PIE_StudioModule.h"
 #include "Engine/World.h"
 #include "Engine/LocalPlayer.h"
-#include "Kismet/GameplayStatics.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "EnhancedPlayerInput.h"
 #include "InputAction.h"
+#include "PIEWorldResolver.h"
 #include "UObject/UObjectIterator.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
@@ -17,7 +16,6 @@
 #include "Components/ActorComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
-#include "InputAction.h"
 #include "UObject/UnrealType.h"
 #include "RenderCore.h"       // GGameThreadTime / GRenderThreadTime
 #include "RHI.h"              // RHIGetGPUFrameTime
@@ -179,6 +177,46 @@ namespace UEMCPPIE
 			return false;
 		}
 
+		// Resolve a subsystem in the PIE world by short (or "U"-prefixed) class
+		// name, so tracked paths of the form "sub:MyGameSubsystem.Phase" can be
+		// sampled per frame (item 2b).
+		UObject* ResolveSubsystemByName(UWorld* World, const FString& ClassName, int32 ClientIndex)
+		{
+			if (!World || ClientIndex < 0)
+			{
+				return nullptr;
+			}
+			auto Match = [&ClassName](UObject* O) -> bool
+			{
+				if (!O) return false;
+				const FString N = O->GetClass()->GetName();
+				return N == ClassName
+					|| N == (FString(TEXT("U")) + ClassName)
+					|| O->GetClass()->GetPathName() == ClassName;
+			};
+			if (UGameInstance* GI = World->GetGameInstance())
+			{
+				for (UGameInstanceSubsystem* S : GI->GetSubsystemArrayCopy<UGameInstanceSubsystem>())
+				{
+					if (Match(S)) return S;
+				}
+
+				const TArray<ULocalPlayer*>& LocalPlayers = GI->GetLocalPlayers();
+				if (LocalPlayers.IsValidIndex(ClientIndex) && LocalPlayers[ClientIndex])
+				{
+					for (ULocalPlayerSubsystem* S :
+						LocalPlayers[ClientIndex]->GetSubsystemArrayCopy<ULocalPlayerSubsystem>())
+					{
+						if (Match(S)) return S;
+					}
+				}
+			}
+			for (UWorldSubsystem* S : World->GetSubsystemArrayCopy<UWorldSubsystem>())
+			{
+				if (Match(S)) return S;
+			}
+			return nullptr;
+		}
 	}
 
 	FPIEFrameSampler::FPIEFrameSampler() = default;
@@ -276,18 +314,35 @@ namespace UEMCPPIE
 
 	bool FPIEFrameSampler::AttachToPIE(UWorld* PIEWorld)
 	{
-		if (bAttached) return true;
-		if (!PIEWorld) return false;
-		APlayerController* PC = (Config.ClientIndex > 0)
-			? UGameplayStatics::GetPlayerController(PIEWorld, Config.ClientIndex)
-			: PIEWorld->GetFirstPlayerController();
-		if (!PC) return false;
+		if (bAttached)
+		{
+			return true;
+		}
+		if (!PIEWorld)
+		{
+			return false;
+		}
+
+		PIEWorldResolver::FPlayerTarget Target;
+		FString Error;
+		if (!PIEWorldResolver::ResolvePlayerInWorld(PIEWorld, Config.ClientIndex, Target, Error))
+		{
+			return false;
+		}
+
+		APlayerController* PC = Target.PlayerController;
+		if (!PC)
+		{
+			return false;
+		}
 		APawn* Pawn = PC->GetPawn();
-		if (!Pawn || !Pawn->InputComponent) return false;
+		if (!Pawn || !Pawn->InputComponent)
+		{
+			return false;
+		}
 
 		PawnClassPath = Pawn->GetClass()->GetPathName();
 		PIEWorldPath = PIEWorld->GetPathName();
-
 		DiscoverActions(PC, Pawn);
 
 		bAttached = true;
@@ -310,13 +365,28 @@ namespace UEMCPPIE
 		Row.GpuMs = static_cast<float>(FPlatformTime::ToMilliseconds(RHIGetGPUFrameCycles()));
 		Row.MemMB = static_cast<float>(FPlatformMemory::GetStats().UsedPhysical / (1024.0 * 1024.0));
 
-		if (!PIEWorld) return Row;
-		APlayerController* PC = (Config.ClientIndex > 0)
-			? UGameplayStatics::GetPlayerController(PIEWorld, Config.ClientIndex)
-			: PIEWorld->GetFirstPlayerController();
-		if (!PC) return Row;
+		if (!PIEWorld)
+		{
+			return Row;
+		}
+
+		PIEWorldResolver::FPlayerTarget Target;
+		FString Error;
+		if (!PIEWorldResolver::ResolvePlayerInWorld(PIEWorld, Config.ClientIndex, Target, Error))
+		{
+			return Row;
+		}
+
+		APlayerController* PC = Target.PlayerController;
+		if (!PC)
+		{
+			return Row;
+		}
 		APawn* Pawn = PC->GetPawn();
-		if (!Pawn) return Row;
+		if (!Pawn)
+		{
+			return Row;
+		}
 
 		// Rescan for late-bound actions (IMCs added after initial attach).
 		{
@@ -444,9 +514,7 @@ namespace UEMCPPIE
 				FString ClassName, PropPath;
 				if (Rest.Split(TEXT("."), &ClassName, &PropPath))
 				{
-					// One resolver, shared with the addressing grammar the driving verbs
-					// use, so "sub:" here and a subsystem address there cannot disagree.
-					if (UObject* SubObj = FPIEObjectAddress::ResolveSubsystem(PIEWorld, ClassName, FString()))
+					if (UObject* SubObj = ResolveSubsystemByName(PIEWorld, ClassName, Config.ClientIndex))
 					{
 						if (ResolvePathToDouble(SubObj, PropPath, Val))
 						{
